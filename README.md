@@ -31,7 +31,7 @@ helm install ipman ipman/ipman -n ipman-system --create-namespace
 
 ## Usage
 
-### Step 1: Create a Secret with Pre-shared Key' 
+### Step 1: Create a Secret with Pre-shared Key 
 
 IPMan requires a secret for IPSec authentication:
 
@@ -59,6 +59,10 @@ assigned to a host interface on one of our nodes `node1`.
 For example we could have a `enp0s1` interface with an address `192.168.10.201` on `node1`
 the next steps assume this is the case.
 
+note: Even though we specify a nodeName here, it's only for the public IP. Workload pods that
+will communicate through this VPN can be on any node. Consult the `Architecture` section for a visual
+explanation.
+
 ### Step 3: Create an IPSecConnection
 
 Create an IPSecConnection Custom Resource (CR) to establish a VPN connection:
@@ -79,6 +83,9 @@ spec:
     name: "ipsec-secret"
     namespace: default
     key: "example"
+  groupRef:
+    name: charongroup1
+    namespace: default
   children:
     example-child:
       name: "example-child"
@@ -102,16 +109,18 @@ This CR looks a lot like StrongSwan configuration file, with following added fie
 1. secretRef
  This is the substitute of `secrets` section of the StrongSwan config file.
  You point it at the secret created in step 1 which contains the PSK.
-2. `xfrm_ip` and `vxlan_ip`
-  These are largly arbitrary with the exception that they have to be in the subnet defined in `local_ips`.
-  For most of use cases you can choose them arbitrarily and make sure they don't conflict between connections and you will be good to go.
-3. `if_id`
-  This has to be unique within a single node since it specifies the ID of an xfrm interface strongswan and the linux kernel use to route
+2. `groupRef`
+  links this connection to a group we defined in step 2.
+3. `xfrm_ip` and `vxlan_ip`
+  These are largely arbitrary with the exception that they have to be in the subnet defined in `local_ips`.
+  For most use cases you can choose them arbitrarily and make sure they don't conflict between connections and you will be good to go.
+4. `if_id`
+  This has to be unique within a single node since it specifies the ID of an xfrm interface, StrongSwan, and the Linux Kernel use to route
   IPSec packets.
-4. `ip_pools`
-  This is the list of IP's which will be given out to pods that are supposed to be in the VPN. So again they have to be IP's defined in
+5. `ip_pools`
+  This is the list of IPs which will be given out to pods that are supposed to be in the VPN. So again they have to be IPs defined in
   `local_ips`. They are split into pools. Here we name our pool `primary` but you can use any name. This helps when you share multiple services
-  with the other side of the VPN. You may want to have a pool `service1` and `service2` and in each you would put IP's that the other side of the VPN
+  with the other side of the VPN. You may want to have a pool `service1` and `service2` and in each you would put IPs that the other side of the VPN
   expects these services to be at.
 
 ### Step 3: Deploy Workloads Using the VPN Connection
@@ -140,7 +149,7 @@ The operator will automatically:
 2. Set up routing for your workloads
 3. Configure bridge FDB entries for communication
 
-If your app requires a specific IP to bind to and you have multiple IP's in a pool you don't necessarily know which pod will
+If your app requires a specific IP to bind to and you have multiple IPs in a pool you don't necessarily know which pod will
 get which IP. To help with that there is an env var set in all worker pods named `VXLAN_IP` so in this example the pod could
 get the IP `10.0.2.3/24` from the pool and the env var will contain the value `10.0.2.3`.
 
