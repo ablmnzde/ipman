@@ -13,4 +13,4 @@ jobs:
           go-version: '1.24.1'
       - uses: ko-build/setup-ko@v0.8
       - run: |
-          ko resolve --push=false -B -f helm-values-template > helm/values.yaml
+          ko resolve --push=false -B -f helm-values-template.yaml > helm/values.yaml
