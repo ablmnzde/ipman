@@ -12,7 +12,7 @@ global:
 controller:
   podTimeoutSeconds: 60
   replicaCount: 1
-  image: "ghcr.io/dialohq/ipman/operator@sha256:2c5f892e428dd6634d3fc640d5f8e227ff8ae1871d01b664cefb53f2d72fdb31"
+  image: "ghcr.io/dialohq/ipman/operator@sha256:ab88e438d7d7969f2b3a04d5764e8ed5ae74b9b6df0319112a0c5962d972317a"
   pullPolicy: IfNotPresent
   podSecurityContext:
     runAsNonRoot: true
@@ -33,20 +33,20 @@ caddy:
   pullPolicy: "IfNotPresent"
 # Restctl service configuration
 restctl:
-  image: "ghcr.io/dialohq/ipman/restctl@sha256:95b0ae64ea9d8a9e2f41b4d44becb664d6ef4083cdc4d5c8d1ce43456921c53c"
+  image: "ghcr.io/dialohq/ipman/restctl@sha256:a57616a0780923a7b03e4ac8b042e8c9b8dd6b50bd3596c380942ef2badb5754"
   pullPolicy: "IfNotPresent"
 # Xfrminjector configuration
 xfrminjector:
-  image: "ghcr.io/dialohq/ipman/xfrminjector@sha256:95f862b8a8cf2a472c2974642e99dbe580ea651935645863779cda8f8a76b47e"
+  image: "ghcr.io/dialohq/ipman/xfrminjector@sha256:e70c48f4b1a0330a8c873de89b5887d79972f65f9c3011ec061fcf4b34bbc020"
   pullPolicy: "IfNotPresent"
   ttlSeconds: 120
 # VxlanLord configuration
 vxlandlord:
-  image: "ghcr.io/dialohq/ipman/vxlandlord@sha256:f46c0825fcddd48395720752a69a36581f1dfa5df8fe8ad6f0d0a7342673bc0a"
+  image: "ghcr.io/dialohq/ipman/vxlandlord@sha256:67c2b82b1616cdcf02770d756a57702fb033bbd42c8f7c48fbed9cbe89db1ed6"
   pullPolicy: "IfNotPresent"
 # XfrmMinion configuration
 xfrminion:
-  image: "ghcr.io/dialohq/ipman/xfrminion@sha256:a6c3d93fa492ebb60dc81ce55f6a8f906a6a7c52d7f33ae72abbb5d0a02018da"
+  image: "ghcr.io/dialohq/ipman/xfrminion@sha256:18c35f9cbdf06664f75e0d6ca5a86d0bc17742f4d08319cfdccdb6efb7bf1cf5"
   pullPolicy: "IfNotPresent"
 # Charon daemon configuration
 charon:
