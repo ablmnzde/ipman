@@ -42,25 +42,5 @@ test:
 	docker build -t $(DOCKERHUB_USER)/xfrminjector:latest-dev-test --platform linux/arm64 --file ./xfrminjector.Dockerfile --build-arg PLATFORM=arm64 .
 	docker push $(DOCKERHUB_USER)/xfrminjector:latest-dev-test 
 
-
-
-vxlandlord:
-	docker build -t $(LOCAL_REGISTRY)/vxlandlord:latest-dev --platform linux/arm64 --file ./vxlandlord.Dockerfile .
-	docker push $(LOCAL_REGISTRY)/vxlandlord:latest-dev 
-xfrminion:
-	docker build -t $(LOCAL_REGISTRY)/xfrminion:latest-dev --platform linux/arm64 --file ./xfrminion.Dockerfile .
-	docker push $(LOCAL_REGISTRY)/xfrminion:latest-dev 
-restctl:
-	docker build -t $(LOCAL_REGISTRY)/restctl:latest-dev --platform linux/arm64 --file ./restctl.Dockerfile .
-	docker push $(LOCAL_REGISTRY)/restctl:latest-dev
-operator:
-	docker build -t $(LOCAL_REGISTRY)/operator:latest-dev --platform linux/arm64 --file ./operator.Dockerfile .
-	docker push $(LOCAL_REGISTRY)/operator:latest-dev 
-charon:
-	docker build -t $(LOCAL_REGISTRY)/charon:latest-dev --platform linux/arm64 --file ./charon.Dockerfile .
-	docker push $(LOCAL_REGISTRY)/charon:latest-dev 
-injector:
-	docker build -t $(LOCAL_REGISTRY)/xfrminjector:latest-dev --platform linux/arm64 --file ./xfrminjector.Dockerfile .
-	docker push $(LOCAL_REGISTRY)/xfrminjector:latest-dev 
-
-all: vxlandlord xfrminion restctl operator charon injector
+all:
+	KO_DOCKER_REPO="192.168.10.201:5000" ko resolve --push=true -B -f helm-values-template.yaml > helm/values.yaml
