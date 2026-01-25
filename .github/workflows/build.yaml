@@ -1,10 +1,10 @@
 name: Build docker
 on:
-  push:
-    branches: ['ci-automation']
+  pull_request:
+    branches: ['master']
 jobs:
-  publish:
-    name: Publish
+  build:
+    name: Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -13,11 +13,4 @@ jobs:
           go-version: '1.24.1'
       - uses: ko-build/setup-ko@v0.8
       - run: |
-          ko resolve -B -f helm-values-template > helm/values.yaml
-
-          git config --global user.name 'Ipman docker build workflow'
-          git config --global user.email 'support@dialo.ai'
-
-          git add helm/values.yaml
-          git commit -m "release(docker): update image docker tags"
-          git push
+          ko resolve --push=false -B -f helm-values-template > helm/values.yaml
