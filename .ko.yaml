@@ -1,3 +1,5 @@
+defaultFlags:
+  - -buildvcs=false
 baseImageOverrides:
   ./cmd/vxlandlord: plan9better/iproute2:latest
   ./cmd/restctl: plan9better/swanctl:latest
@@ -5,3 +7,4 @@ baseImageOverrides:
   ./cmd/xfrminion: gcr.io/distroless/static
 defaultPlatforms:
   - linux/amd64
+  - linux/arm64

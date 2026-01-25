@@ -58,6 +58,7 @@
             gopls
             delve
             go
+            ko
             nilaway
 
             act
