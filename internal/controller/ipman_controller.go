@@ -1305,7 +1305,7 @@ func diffIPSecs(desired, current []IPSecConnectionState, restctlIP string) []Act
 			continue
 		}
 		if cState.State == "" || cState.ChildrenState == nil {
-			acts = append(acts, &UpdateChildConnectionStatus{ConnectionName: cState.Name})
+			acts = append(acts, &UpdateChildConnectionStatus{ConnectionName: dState.Name})
 		}
 		if cState.State == "Down" {
 			acts = append(acts, &RestartConnectionAction{Name: cState.Name, RestctlIP: restctlIP})
@@ -1313,9 +1313,9 @@ func diffIPSecs(desired, current []IPSecConnectionState, restctlIP string) []Act
 		for childName := range dState.ChildrenState {
 			val, ok := cState.ChildrenState[childName]
 			if !ok || cState.State == "" {
-				acts = append(acts, &UpdateChildConnectionStatus{ConnectionName: cState.Name})
+				acts = append(acts, &UpdateChildConnectionStatus{ConnectionName: dState.Name})
 			} else if val != "UP" {
-				acts = append(acts, &RestartChildConnectionAction{ConnectionName: cState.Name, ChildName: childName, RestctlIP: restctlIP})
+				acts = append(acts, &RestartChildConnectionAction{ConnectionName: dState.Name, ChildName: childName, RestctlIP: restctlIP})
 			}
 		}
 	}
