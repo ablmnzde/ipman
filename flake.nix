@@ -83,6 +83,7 @@
           '';
           env = {
             KUBECONFIG = "./kubeconfig";
+            GOFLAGS = "-trimpath -buildvcs=false";
           };
         };
       }

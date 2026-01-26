@@ -43,4 +43,4 @@ test:
 	docker push $(DOCKERHUB_USER)/xfrminjector:latest-dev-test 
 
 all:
-	KO_DOCKER_REPO="192.168.10.201:5000" ko resolve --push=true -B -f helm-values-template.yaml > helm/values.yaml
+	GOFLAGS="-trimpath -buildvcs=false" KO_DOCKER_REPO="192.168.10.201:5000" ko resolve --push=true -B -f helm-values-template.yaml > helm/values.yaml

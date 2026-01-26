@@ -1,5 +1,3 @@
-defaultFlags:
-  - -buildvcs=false
 baseImageOverrides:
   ./cmd/vxlandlord: plan9better/iproute2:latest
   ./cmd/restctl: plan9better/swanctl:latest
