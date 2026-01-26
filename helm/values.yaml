@@ -12,7 +12,7 @@ global:
 controller:
   podTimeoutSeconds: 60
   replicaCount: 1
-  image: "ghcr.io/dialohq/ipman/operator@sha256:f017ad235f3c1b35d6a433bccbdb8631c50eba39c4468719cf6ef8dbe09a3bf9"
+  image: "ghcr.io/dialohq/ipman/operator@sha256:be786c71339d2258a4552f16df56fe0da359735cb3e9549dd069c1022dfedce4"
   pullPolicy: IfNotPresent
   podSecurityContext:
     runAsNonRoot: true
@@ -33,7 +33,7 @@ caddy:
   pullPolicy: "IfNotPresent"
 # Restctl service configuration
 restctl:
-  image: "ghcr.io/dialohq/ipman/restctl@sha256:8e59a664998588cc2520da71201c9de2aad157bbf9e582ea1d93207190bb8854"
+  image: "ghcr.io/dialohq/ipman/restctl@sha256:15df3c481e5e94a5ae8b5ba4d51fdfcd922b1b26ecbb0314cc758da100eba793"
   pullPolicy: "IfNotPresent"
 # Xfrminjector configuration
 xfrminjector:
