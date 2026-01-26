@@ -14,9 +14,9 @@ entries:
           - https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
       apiVersion: v2
       appVersion: 0.1.18
-      created: "2026-01-25T18:03:52.581599+01:00"
+      created: "2026-01-26T13:23:23.053906+01:00"
       description: IPSec connection manager
-      digest: 28ff852e7aa40f7cd439a84d50dab631f114d6a95da7bcc78c205c8a6cc5e355
+      digest: 3e3a7b42d5c4b8cf56805c566ed88e43c0f3508413093dcfc259cde7bae71387
       name: ipman
       type: application
       urls:
@@ -346,4 +346,4 @@ entries:
       urls:
         - https://github.com/dialohq/ipman/releases/download/v0.1.8/ipman-0.1.8.tgz
       version: 0.1.8
-generated: "2026-01-25T18:03:52.57987+01:00"
+generated: "2026-01-26T13:23:23.051464+01:00"
