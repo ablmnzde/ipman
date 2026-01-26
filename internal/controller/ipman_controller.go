@@ -228,7 +228,7 @@ func GetClusterIPSecs(ctx context.Context, r *IPSecConnectionReconciler) ([]IPSe
 	if err != nil {
 		return nil, err
 	}
-	list := make([]IPSecConnectionState, len(IPSecs.Items))
+	list := make([]IPSecConnectionState, 0, len(IPSecs.Items))
 	for _, c := range IPSecs.Items {
 		if strings.TrimSpace(c.Name) == "" {
 			continue
@@ -413,12 +413,8 @@ func (r *IPSecConnectionReconciler) GetClusterState(ctx context.Context) (*Clust
 		xfrmClone := make([]IpmanPod[XfrmPodSpec], len(xfrms))
 		copy(xfrmClone, xfrms)
 
-		// clone to easily filter with slices.delete later
-		ipsecsClone := make([]IPSecConnectionState, len(IPSecs))
-		copy(ipsecsClone, IPSecs)
-
 		groupXfrms := FindXfrms(xfrmClone, ref)
-		groupIPSecs := FindIPSecs(IPSecs, ref)
+		groupIPSecs := FindIPSecs(slices.Clone(IPSecs), ref)
 		ns := GroupState{
 			Charon:   FindPod(charons, ref),
 			Proxy:    FindPod(proxies, ref),
@@ -460,7 +456,7 @@ func (r *IPSecConnectionReconciler) CreateClusterNodes(cl []ipmanv1.IPSecConnect
 		ps := FindXfrms(slices.Clone(xfrms), ref)
 		charon := FindPod(chs, ref)
 		proxy := FindPod(prxs, ref)
-		groupIpsecs := FindIPSecs(ipsecs, ref)
+		groupIpsecs := FindIPSecs(slices.Clone(ipsecs), ref)
 		g := GroupState{
 			Charon:   charon,
 			Proxy:    proxy,
@@ -723,20 +719,20 @@ func (r *IPSecConnectionReconciler) CreateXfrms(cl []ipmanv1.IPSecConnection) []
 }
 
 func createIPSecs(cl []ipmanv1.IPSecConnection) []IPSecConnectionState {
-	list := make([]IPSecConnectionState, len(cl))
+	list := make([]IPSecConnectionState, 0, len(cl))
 	for _, conn := range cl {
 		if strings.TrimSpace(conn.Name) == "" {
 			continue
 		}
 
-		childrenState := make(map[string]string, len(conn.Spec.Children))
+		childrenState := make(map[string]string)
 		for name := range conn.Spec.Children {
 			childrenState[name] = "UP"
 		}
 		list = append(list, IPSecConnectionState{
 			Name:          conn.Name,
-			State:         conn.Status.State,
-			ChildrenState: conn.Status.ChildrenState,
+			State:         "UP",
+			ChildrenState: childrenState,
 			Group:         conn.Spec.Group,
 		})
 	}
@@ -1289,7 +1285,7 @@ func diffIPSecs(desired, current []IPSecConnectionState, restctlIP string) []Act
 	// There is nothing we can (should) do about missing CR's
 	// so just filter them out in the edge case that
 	// something happened between `List` calls.
-	desiredFiltered := make([]IPSecConnectionState, len(current))
+	desiredFiltered := make([]IPSecConnectionState, 0, len(current))
 	acts := make([]Action, 0)
 	for _, dState := range desired {
 		if slices.ContainsFunc(current, func(s IPSecConnectionState) bool {
@@ -1360,7 +1356,6 @@ func (r *IPSecConnectionReconciler) DiffStates(desired *ClusterState, current *C
 	for _, gs := range desired.Groups {
 		idx, found := findGroup(gs.GroupRef, current)
 		if !found {
-			fmt.Printf("Couldn't find group %s in current cluster state, skipping...\n", gs.GroupRef.Name)
 			continue
 		}
 
@@ -1383,6 +1378,7 @@ func (r *IPSecConnectionReconciler) DiffStates(desired *ClusterState, current *C
 				acts = append(acts, xfrmActions...)
 			}
 			// At this point there may not be a restctl pod
+			// and we need it to pass it's ip to the action
 			if current.Groups[idx].Proxy != nil {
 				ipsecActions := diffIPSecs(gs.IPSecs, current.Groups[idx].IPSecs, current.Groups[idx].Proxy.Meta.IP)
 				acts = append(acts, ipsecActions...)

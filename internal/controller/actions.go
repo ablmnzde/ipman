@@ -610,7 +610,7 @@ func (a *UpdateChildConnectionStatus) Do(ctx context.Context, r *IPSecConnection
 	// case restctl will change it back.
 	for cname := range ipsec.Spec.Children {
 		if ipsec.Status.ChildrenState == nil {
-			ipsec.Status.ChildrenState = make(map[string]string, len(ipsec.Spec.Children))
+			ipsec.Status.ChildrenState = make(map[string]string)
 		}
 		ipsec.Status.ChildrenState[cname] = "UP"
 	}
