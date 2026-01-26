@@ -33,7 +33,7 @@ caddy:
   pullPolicy: "IfNotPresent"
 # Restctl service configuration
 restctl:
-  image: "ghcr.io/dialohq/ipman/restctl@sha256:15df3c481e5e94a5ae8b5ba4d51fdfcd922b1b26ecbb0314cc758da100eba793"
+  image: "ghcr.io/dialohq/ipman/restctl@sha256:3d644a97432e45bc629b3ea4a0c426a4a15521fa7bc1c3ee8434ad8f98a49697"
   pullPolicy: "IfNotPresent"
 # Xfrminjector configuration
 xfrminjector:
@@ -42,7 +42,7 @@ xfrminjector:
   ttlSeconds: 120
 # VxlanLord configuration
 vxlandlord:
-  image: "ghcr.io/dialohq/ipman/vxlandlord@sha256:7d8c72ba87db1caf4e46e141892c877b7fb1c95a8260e4e8c2b016e0730ab2f1"
+  image: "ghcr.io/dialohq/ipman/vxlandlord@sha256:077ed22c3109e5ebbae46ef1840caf5e17f86cf6e041249bf975740ece0d1bed"
   pullPolicy: "IfNotPresent"
 # XfrmMinion configuration
 xfrminion:
