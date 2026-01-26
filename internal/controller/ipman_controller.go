@@ -1525,9 +1525,14 @@ func (r *IPSecConnectionReconciler) Reconcile(ctx context.Context, req reconcile
 		logger.Info("Doing action", "type", reflect.TypeOf(a))
 		err = a.Do(ctx, r)
 		if err != nil {
+			val, ok := err.(*ConnectionRestartError)
 			r.EventRecorder.Event(&operatorPod, "Warning", "DoActionError", fmt.Sprintf("%s: %s", reflect.TypeOf(a), err.Error()))
-			logger.Info("Error executing action", "action", a, "msg", err)
-			return ctrl.Result{}, err
+			if !ok {
+				logger.Info("Error executing action", "action", a, "msg", err)
+				return ctrl.Result{}, err
+			} else {
+				logger.Info("Error restarting connection", "error", val)
+			}
 		}
 	}
 

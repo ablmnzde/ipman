@@ -476,8 +476,23 @@ func RestartConnection(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode("Bad Request")
 		return
 	}
-	logger.Info("Restarting connection", "connection", data.Name)
+	failures, err := listFailedConnections()
+	if err != nil {
+		logger.Error("Error listing failed connections while trying to restart", "connection", data.Name, "error", err)
+		w.WriteHeader(500)
+		json.NewEncoder(w).Encode("Action failed")
+		return
+	}
+	if !slices.ContainsFunc(failures, func(f FailureInfo) bool {
+		return f.Connection == data.Name && f.Child == ""
+	}) {
+		logger.Info("Connection is not failed", "connection", data.Name)
+		w.WriteHeader(200)
+		json.NewEncoder(w).Encode("OK")
+		return
+	}
 
+	logger.Info("Restarting connection", "connection", data.Name)
 	output, err := swanctlCombinedOutput("--initiate", "--ike", data.Name, "--timeout", "3")
 	if err != nil {
 		logger.Error("Failed to restart connection", "conn", data.Name, "err", err, "output", output)
@@ -508,6 +523,22 @@ func RestartConnectionChild(w http.ResponseWriter, r *http.Request) {
 		logger.Error("Error unmarshaling body of request for a child restart", "msg", err.Error())
 		w.WriteHeader(400)
 		json.NewEncoder(w).Encode("Bad Request")
+		return
+	}
+
+	failures, err := listFailedConnections()
+	if err != nil {
+		logger.Error("Error listing failed connections while trying to restart", "connection", data.ConnectionName, "error", err)
+		w.WriteHeader(500)
+		json.NewEncoder(w).Encode("Action failed")
+		return
+	}
+	if !slices.ContainsFunc(failures, func(f FailureInfo) bool {
+		return f.Connection == data.ConnectionName && f.Child == data.ChildName
+	}) {
+		logger.Info("Child connection is not failed", "connection", data.ConnectionName, "child", data.ChildName)
+		w.WriteHeader(200)
+		json.NewEncoder(w).Encode("OK")
 		return
 	}
 
@@ -670,43 +701,32 @@ func createK8sClient() (k8sclient client.Client, ctx context.Context, ctxCancel 
 	return
 }
 
+func listFailedConnections() ([]FailureInfo, error) {
+	connsAST, err := swanctlListConns()
+	if err != nil {
+		return nil, err
+	}
+
+	sasAST, err := swanctlListSas()
+	if err != nil {
+		return nil, err
+	}
+
+	failures, err := checkStatus(connsAST, sasAST)
+	if err != nil {
+		return nil, err
+	}
+	return failures, nil
+}
+
 func monitorConnections(ch chan<- FailureInfo, log *slog.Logger) {
 	for {
-		var vc *goviciclient.ViciClient
-		var err error
-		for {
-			vc, err = goviciclient.NewViciClient(nil)
-			if err != nil {
-				log.Error("Failed to create a vici client", "error", err)
-				time.Sleep(time.Second / 3)
-				continue
-			}
-			break
-		}
-
-		connsAST, err := swanctlListConns()
+		failures, err := listFailedConnections()
 		if err != nil {
-			log.Error("error trying to initiate connection reconciliation", "msg", err)
-			return
-		}
-
-		sasAST, err := swanctlListSas()
-		if err != nil {
-			log.Error("error trying to initiate connection reconciliation", "msg", err)
-			return
-		}
-
-		failures, err := checkStatus(connsAST, sasAST)
-		if err != nil {
-			log.Error("Error reconciling connections", "err", err)
-			return
+			log.Error("Error listing failed strongswan connections", "error", err)
 		}
 		for _, f := range failures {
 			ch <- f
-		}
-		err = vc.Close()
-		if err != nil {
-			log.Error("Failed to close a vici client", "msg", err)
 		}
 		time.Sleep(5 * time.Second)
 	}
