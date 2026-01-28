@@ -12,7 +12,7 @@ global:
 controller:
   podTimeoutSeconds: 60
   replicaCount: 1
-  image: "ghcr.io/dialohq/ipman/operator@sha256:be786c71339d2258a4552f16df56fe0da359735cb3e9549dd069c1022dfedce4"
+  image: "ghcr.io/dialohq/ipman/operator@sha256:4d73df389d1ec5125092f11459afab449dc45bacbdb22e288840738214b7a2db"
   pullPolicy: IfNotPresent
   podSecurityContext:
     runAsNonRoot: true
@@ -46,7 +46,7 @@ vxlandlord:
   pullPolicy: "IfNotPresent"
 # XfrmMinion configuration
 xfrminion:
-  image: "ghcr.io/dialohq/ipman/xfrminion@sha256:bff0e1c2e9845431afcf4333117d0a8994def1a23d49601e46e47430fab2d21c"
+  image: "ghcr.io/dialohq/ipman/xfrminion@sha256:4efaba9da28d1a18789f49cfc1bb10d59ab09448f4407ca596a8588d85a9f391"
   pullPolicy: "IfNotPresent"
 # Charon daemon configuration
 charon:
