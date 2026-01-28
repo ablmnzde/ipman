@@ -2,7 +2,7 @@ baseImageOverrides:
   ./cmd/vxlandlord: plan9better/iproute2:latest
   ./cmd/restctl: plan9better/swanctl:latest
   ./cmd/xfrminjector: gcr.io/distroless/static
-  ./cmd/xfrminion: gcr.io/distroless/static
+  ./cmd/xfrminion: plan9better/iproute2:latest
 defaultPlatforms:
   - linux/amd64
   - linux/arm64
