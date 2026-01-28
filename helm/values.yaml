@@ -42,11 +42,11 @@ xfrminjector:
   ttlSeconds: 120
 # VxlanLord configuration
 vxlandlord:
-  image: "ghcr.io/dialohq/ipman/vxlandlord@sha256:077ed22c3109e5ebbae46ef1840caf5e17f86cf6e041249bf975740ece0d1bed"
+  image: "ghcr.io/dialohq/ipman/vxlandlord@sha256:ed6b82a0254df7d95b0891b113f3065fe75f8eb7f46f5cc713ab941b00db1d9f"
   pullPolicy: "IfNotPresent"
 # XfrmMinion configuration
 xfrminion:
-  image: "ghcr.io/dialohq/ipman/xfrminion@sha256:4efaba9da28d1a18789f49cfc1bb10d59ab09448f4407ca596a8588d85a9f391"
+  image: "ghcr.io/dialohq/ipman/xfrminion@sha256:905f39fe50efd84f10766f3dce47342ab78a7e3724acaf5d63a14e9b952abb7f"
   pullPolicy: "IfNotPresent"
 # Charon daemon configuration
 charon:
