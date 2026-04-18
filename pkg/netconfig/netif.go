@@ -3,6 +3,7 @@ package netconfig
 import (
 	"fmt"
 	ip "github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 	"net"
 	"strconv"
 	"strings"
@@ -18,7 +19,7 @@ func FindDefaultInterface() (*ip.Link, error) {
 		return nil, fmt.Errorf("Error listing links: %s", err.Error())
 	}
 	for _, l := range links {
-		routes, err := ip.RouteList(l, ip.FAMILY_V4)
+		routes, err := ip.RouteList(l, unix.AF_INET)
 		if err != nil {
 			return nil, fmt.Errorf("Error listing routes for device %s: %s", l.Attrs().Name, err.Error())
 		}

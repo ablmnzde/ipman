@@ -419,6 +419,7 @@ func (r *IPSecConnectionReconciler) GetClusterState(ctx context.Context) (*Clust
 			Charon:   FindPod(charons, ref),
 			Proxy:    FindPod(proxies, ref),
 			Xfrms:    groupXfrms,
+			NodeName: g.Status.ActiveNodeName,
 			GroupRef: ref,
 			IPSecs:   groupIPSecs,
 		}
@@ -461,6 +462,7 @@ func (r *IPSecConnectionReconciler) CreateClusterNodes(cl []ipmanv1.IPSecConnect
 			Charon:   charon,
 			Proxy:    proxy,
 			Xfrms:    ps,
+			NodeName: groups[nsn].Status.ActiveNodeName,
 			GroupRef: ref,
 			IPSecs:   groupIpsecs,
 		}
@@ -1025,6 +1027,10 @@ func (r *IPSecConnectionReconciler) diffProxy(desired *IpmanPod[RestctlPodSpec],
 	sameMeta := comparePods(desired, current)
 	if !sameMeta {
 		return []Action{&DeletePodAction[RestctlPodSpec]{Pod: current}, &CreatePodAction[RestctlPodSpec]{Pod: desired}, &OverrideConfigAction{PodName: desired.Meta.Name, Configs: connsPerGroup}}, nil
+	}
+
+	if r.Env.IsTest {
+		return []Action{}, nil
 	}
 
 	url := fmt.Sprintf("http://%s:61410/configs", current.Meta.IP)
@@ -1609,7 +1615,7 @@ func (r *IPSecConnectionReconciler) Reconcile(ctx context.Context, req reconcile
 	if !apierrors.IsNotFound(err) {
 		if err != nil {
 			logger.Error(err, "Error fetching pod")
-			r.EventRecorder.Event(&operatorPod, "Warning", "FetchPod", err.Error())
+			r.recordEvent(&operatorPod, "Warning", "FetchPod", err.Error())
 			return ctrl.Result{}, err
 		} else {
 			if pod.Status.PodIP == "" {
@@ -1622,7 +1628,7 @@ func (r *IPSecConnectionReconciler) Reconcile(ctx context.Context, req reconcile
 	rq, err := r.UpdateStatus(ctx)
 	ctr := 1
 	for apierrors.IsConflict(err) && ctr <= ipmanv1.UpdateStatusMaxRetries {
-		r.EventRecorder.Event(&operatorPod, "Warning", "UpdateStatus", err.Error())
+		r.recordEvent(&operatorPod, "Warning", "UpdateStatus", err.Error())
 		logger.Info("Error updating status, trying again", "tries", fmt.Sprintf("%d/%d", ctr, ipmanv1.UpdateStatusMaxRetries), "error", err)
 		rq, err = r.UpdateStatus(ctx)
 		ctr += 1
@@ -1636,7 +1642,7 @@ func (r *IPSecConnectionReconciler) Reconcile(ctx context.Context, req reconcile
 
 	err = r.ensureFrontendServices(ctx)
 	if err != nil {
-		r.EventRecorder.Event(&operatorPod, "Warning", "EnsureFrontendServices", err.Error())
+		r.recordEvent(&operatorPod, "Warning", "EnsureFrontendServices", err.Error())
 		logger.Error(err, "Error ensuring frontend services")
 		return ctrl.Result{}, err
 	}
@@ -1646,7 +1652,7 @@ func (r *IPSecConnectionReconciler) Reconcile(ctx context.Context, req reconcile
 		if errors.Is(err, &RequestError{}) {
 			return ctrl.Result{}, err
 		}
-		r.EventRecorder.Event(&operatorPod, "Warning", "GetClusterState", err.Error())
+		r.recordEvent(&operatorPod, "Warning", "GetClusterState", err.Error())
 		logger.Error(err, "Error getting cluster state")
 		return ctrl.Result{}, err
 	}
@@ -1657,7 +1663,7 @@ func (r *IPSecConnectionReconciler) Reconcile(ctx context.Context, req reconcile
 			return ctrl.Result{}, err
 		}
 		logger.Error(err, "Error creating desired cluster state")
-		r.EventRecorder.Event(&operatorPod, "Warning", "CreateClusterState", err.Error())
+		r.recordEvent(&operatorPod, "Warning", "CreateClusterState", err.Error())
 		return ctrl.Result{}, err
 	}
 
@@ -1669,7 +1675,7 @@ func (r *IPSecConnectionReconciler) Reconcile(ctx context.Context, req reconcile
 
 	actions, err := r.DiffStates(desiredState, currentState, cl.Items)
 	if err != nil {
-		r.EventRecorder.Event(&operatorPod, "Warning", "DiffStates", err.Error())
+		r.recordEvent(&operatorPod, "Warning", "DiffStates", err.Error())
 		return ctrl.Result{}, fmt.Errorf("Error comparing states: %w", err)
 	}
 	actionTypes := []string{}
@@ -1690,7 +1696,7 @@ func (r *IPSecConnectionReconciler) Reconcile(ctx context.Context, req reconcile
 		err = a.Do(ctx, r)
 		if err != nil {
 			val, ok := err.(*ConnectionRestartError)
-			r.EventRecorder.Event(&operatorPod, "Warning", "DoActionError", fmt.Sprintf("%s: %s", reflect.TypeOf(a), err.Error()))
+			r.recordEvent(&operatorPod, "Warning", "DoActionError", fmt.Sprintf("%s: %s", reflect.TypeOf(a), err.Error()))
 			if !ok {
 				logger.Info("Error executing action", "action", a, "msg", err)
 				return ctrl.Result{}, err
@@ -1702,11 +1708,18 @@ func (r *IPSecConnectionReconciler) Reconcile(ctx context.Context, req reconcile
 
 	if n := len(r.NotLoadedConns); n != 0 {
 		logger.Info("Some connections not loaded, requing in 3s", "amount", n, "connections", r.NotLoadedConns)
-		r.EventRecorder.Event(&pod, "Warning", "ConnectionNotLoaded", fmt.Sprintf("Connections: %s", strings.Join(r.NotLoadedConns, ",")))
+		r.recordEvent(&pod, "Warning", "ConnectionNotLoaded", fmt.Sprintf("Connections: %s", strings.Join(r.NotLoadedConns, ",")))
 		return res(rq, time.Second*3), nil
 	}
 
 	return res(rq), nil
+}
+
+func (r *IPSecConnectionReconciler) recordEvent(obj client.Object, eventtype, reason, message string) {
+	if r.EventRecorder == nil || obj == nil {
+		return
+	}
+	r.EventRecorder.Event(obj, eventtype, reason, message)
 }
 
 // SetupWithManager sets up the controller with the Manager

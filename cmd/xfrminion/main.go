@@ -18,6 +18,7 @@ import (
 	"dialo.ai/ipman/pkg/netconfig"
 	u "dialo.ai/ipman/pkg/utils"
 	ip "github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 )
 
 func addBridgeFDB(w http.ResponseWriter, r *http.Request) {
@@ -437,7 +438,7 @@ func setupVxlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addrs, err := ip.AddrList(*ciliumInterface, ip.FAMILY_V4)
+	addrs, err := ip.AddrList(*ciliumInterface, unix.AF_INET)
 	if err != nil {
 		logger.Error("Error listing addresses for default interface", "msg", err, "interface", (*ciliumInterface).Attrs().Name)
 		writeError(w, err, nil)
@@ -495,7 +496,7 @@ func setupVxlan(w http.ResponseWriter, r *http.Request) {
 	err = ip.LinkSetUp(xfrmIface)
 	u.Fatal(err, logger, "Error setting xfrm interface up")
 
-	routes, err := ip.RouteList(xfrmIface, ip.FAMILY_V4)
+	routes, err := ip.RouteList(xfrmIface, unix.AF_INET)
 	u.Fatal(err, logger, "Couldn't list routes for local ip", "dst", localIpNet)
 
 	for i, route := range routes {

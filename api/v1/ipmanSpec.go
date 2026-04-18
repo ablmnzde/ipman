@@ -10,6 +10,9 @@ type IPSecConnectionSpec struct {
 	Children   map[string]Child  `json:"children"`
 	Extra      map[string]string `json:"extra,omitempty"`
 	Group      CharonGroupRef    `json:"groupRef"`
+	// NodeName is kept for backward compatibility with older tests and manifests.
+	// It is ignored by the reconciler in favor of CharonGroup placement.
+	NodeName string `json:"nodeName,omitempty"`
 }
 
 type ConnData struct {

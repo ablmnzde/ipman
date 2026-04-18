@@ -1,8 +1,8 @@
 baseImageOverrides:
-  ./cmd/vxlandlord: ablmnzde/ipman-iproute2:0.1.19-abl1
-  ./cmd/restctl: ablmnzde/ipman-swanctl:0.1.19-abl1
-  ./cmd/xfrminjector: gcr.io/distroless/static
-  ./cmd/xfrminion: ablmnzde/ipman-iproute2:0.1.19-abl1
+  dialo.ai/ipman/cmd/vxlandlord: ablmnzde/ipman-iproute2:0.1.19-abl2
+  dialo.ai/ipman/cmd/restctl: ablmnzde/ipman-swanctl:0.1.19-abl2
+  dialo.ai/ipman/cmd/xfrminjector: gcr.io/distroless/static
+  dialo.ai/ipman/cmd/xfrminion: ablmnzde/ipman-iproute2:0.1.19-abl2
 defaultPlatforms:
   - linux/amd64
   - linux/arm64

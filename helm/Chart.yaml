@@ -1,9 +1,9 @@
 apiVersion: v2
-appVersion: "0.1.19-abl1"
+appVersion: "0.1.19-abl2"
 description: IPSec connection manager
 name: ipman
 type: application
-version: 0.1.19-abl1
+version: 0.1.19-abl2
 annotations:
   artifacthub.io/category: "networking"
   artifacthub.io/crds: |

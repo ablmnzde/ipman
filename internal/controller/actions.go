@@ -528,7 +528,7 @@ func (a *RestartConnectionAction) Do(ctx context.Context, r *IPSecConnectionReco
 	}
 	resp, err := comms.SendPost(url, data)
 	if err != nil {
-		return fmt.Errorf("Error sending request to reload a connection to restctl pod at %s: ", a.RestctlIP, err)
+		return fmt.Errorf("Error sending request to reload a connection to restctl pod at %s: %w", a.RestctlIP, err)
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -571,7 +571,7 @@ func (a *RestartChildConnectionAction) Do(ctx context.Context, r *IPSecConnectio
 	}
 	resp, err := comms.SendPost(url, data)
 	if err != nil {
-		return fmt.Errorf("Error sending request to reload a connection to restctl pod at %s: ", a.RestctlIP, err)
+		return fmt.Errorf("Error sending request to reload a connection to restctl pod at %s: %w", a.RestctlIP, err)
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

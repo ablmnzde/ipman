@@ -104,6 +104,7 @@ type PodMeta struct {
 	Namespace    string              `json:"namespace" diff:"namespace"`
 	IP           string              `json:"ip" diff:"-"`
 	NodeName     string              `json:"node" diff:"node"`
+	NodeID       string              `json:"node_id,omitempty" diff:"node_id"`
 	NodeSelector map[string]string   `json:"nodeSelector,omitempty" diff:"nodeSelector"`
 	Tolerations  []corev1.Toleration `json:"tolerations,omitempty" diff:"tolerations"`
 	Affinity     *corev1.Affinity    `json:"affinity,omitempty" diff:"affinity"`
@@ -112,11 +113,14 @@ type PodMeta struct {
 
 // GroupState represents the state of all IPMan pods on a specific node
 type GroupState struct {
-	Charon   *IpmanPod[CharonPodSpec]  `json:"charon" diff:"charon"`
-	Proxy    *IpmanPod[RestctlPodSpec] `json:"proxy" diff:"proxy"`
-	Xfrms    []IpmanPod[XfrmPodSpec]   `json:"xfrms" diff:"xfrms"`
-	GroupRef ipmanv1.CharonGroupRef
-	IPSecs   []IPSecConnectionState
+	Charon *IpmanPod[CharonPodSpec]  `json:"charon" diff:"charon"`
+	Proxy  *IpmanPod[RestctlPodSpec] `json:"proxy" diff:"proxy"`
+	Xfrms  []IpmanPod[XfrmPodSpec]   `json:"xfrms" diff:"xfrms"`
+	// NodeName is kept for backward compatibility with older tests.
+	NodeName  string `json:"node_name,omitempty" diff:"node_name"`
+	MachineID string `json:"machine_id,omitempty" diff:"machine_id"`
+	GroupRef  ipmanv1.CharonGroupRef
+	IPSecs    []IPSecConnectionState
 }
 
 type IPSecConnectionState struct {

@@ -7,9 +7,12 @@ helm/ipman-*.tgz
 CLAUDE.md
 samples
 .gocache
+.gomodcache
 
 **/.claude/settings.local.json
 
 .direnv
 operator
 restctl
+vxlandlord
+xfrminion

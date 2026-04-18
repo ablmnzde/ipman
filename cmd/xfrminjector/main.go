@@ -74,7 +74,7 @@ func main() {
 
 	err = netns.Set(ns)
 	if err != nil {
-		klog.Error("Couldn't set netns from PID %d: %s", sourcePIDInt, err.Error())
+		klog.Errorf("Couldn't set netns from PID %d: %s", sourcePIDInt, err.Error())
 		os.Exit(1)
 	}
 	var finalLink *ip.Link

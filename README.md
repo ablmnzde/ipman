@@ -185,12 +185,12 @@ conn myvpn
     keyexchange=ikev2
     type=tunnel
 
-    left=85.215.61.92
-    leftid=85.215.61.92
+    left=<REMOTE_GATEWAY_IP>
+    leftid=<REMOTE_GATEWAY_IP>
     leftsubnet=10.0.1.0/24
 
     right=%any
-    rightid=87.106.197.164
+    rightid=<IPMAN_LOADBALANCER_IP>
     rightsubnet=10.0.2.0/24
 
     ike=aes256-sha256-modp2048

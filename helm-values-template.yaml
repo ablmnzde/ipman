@@ -50,7 +50,7 @@ xfrminion:
   pullPolicy: "IfNotPresent"
 # Charon daemon configuration
 charon:
-  image: "ablmnzde/ipman-charon:0.1.19-abl1"
+  image: "ablmnzde/ipman-charon:0.1.19-abl2"
   pullPolicy: "IfNotPresent"
 # Optional bootstrap CharonGroup configuration
 charonGroup:

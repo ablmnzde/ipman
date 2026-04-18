@@ -13,13 +13,13 @@ entries:
           - https://artifacthub.io/packages/helm/cert-manager/cert-manager
           - https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
       apiVersion: v2
-      appVersion: 0.1.19-abl1
+      appVersion: 0.1.19-abl2
       created: "2026-04-18T18:28:00.687901+03:00"
       description: IPSec connection manager
       digest: e0d766be3692984ccdefdd9d0f09c93be7d794f5c6a6793dd94d5403103ee322
       name: ipman
       type: application
       urls:
-        - https://github.com/ablmnzde/ipman/releases/download/v0.1.19-abl1/ipman-0.1.19-abl1.tgz
-      version: 0.1.19-abl1
+        - https://github.com/ablmnzde/ipman/releases/download/v0.1.19-abl2/ipman-0.1.19-abl2.tgz
+      version: 0.1.19-abl2
 generated: "2026-04-18T18:28:00.687901+03:00"

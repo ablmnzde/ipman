@@ -2,18 +2,20 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 
-	"log/slog"
-
 	"dialo.ai/ipman/pkg/netconfig"
 	u "dialo.ai/ipman/pkg/utils"
 	ip "github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 )
+
+const rtnhOnlink = 0x4
 
 func createVxlan(underlying *ip.Link, local_ip net.IP, id int) (*ip.Link, error) {
 	vxlanName := "vxlan" + strconv.FormatInt(int64(id), 10)
@@ -59,7 +61,7 @@ func main() {
 	ciliumInterface, err := netconfig.FindDefaultInterface()
 	u.Fatal(err, logger, "Error finding default interface")
 
-	addrs, err := ip.AddrList(*ciliumInterface, ip.FAMILY_V4)
+	addrs, err := ip.AddrList(*ciliumInterface, unix.AF_INET)
 	u.Fatal(err, logger, "Error listing addresses")
 
 	if len(addrs) == 0 {
@@ -135,7 +137,7 @@ func main() {
 			Dst:       remoteIpNet,
 			Src:       vxlan_ipnet.IP,
 			Gw:        xfrm_ipnet.IP,
-			Flags:     int(ip.FLAG_ONLINK),
+			Flags:     rtnhOnlink,
 		}
 
 		err = ip.RouteAdd(r)

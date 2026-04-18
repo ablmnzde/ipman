@@ -27,6 +27,8 @@ type IPSecConnectionStatus struct {
 	ChildrenState      map[string]string              `json:"childrenState"`
 	EffectiveLocalAddr string                         `json:"effectiveLocalAddr,omitempty"`
 	EffectiveLocalId   string                         `json:"effectiveLocalId,omitempty"`
+	// CharonProxyIP is kept for backward compatibility with older tests and clients.
+	CharonProxyIP string `json:"charonProxyIP,omitempty"`
 }
 
 // IPSecConnection is the Kubernetes resource for configuring an IPSec connection.

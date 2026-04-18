@@ -38,9 +38,13 @@ func (s XfrmPodSpec) ApplySpec(p *corev1.Pod, e Envs) {
 			Image:           e.XfrminionImage,
 			ImagePullPolicy: corev1.PullPolicy(e.XfrminionPullPolicy),
 			SecurityContext: &corev1.SecurityContext{
+				AllowPrivilegeEscalation: u.Ptr(true),
+				Privileged:               u.Ptr(true),
+				RunAsUser:                u.Ptr(int64(0)),
 				Capabilities: &corev1.Capabilities{
 					Add: []corev1.Capability{
 						"NET_ADMIN",
+						"SYS_ADMIN",
 					},
 				},
 			},
@@ -197,10 +201,16 @@ func createXfrmJob(r *IPSecConnectionReconciler, pid, id int, connName string, g
 		Spec: batchv1.JobSpec{
 			TTLSecondsAfterFinished: r.Env.XfrminjectorTTL,
 			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						"container.apparmor.security.beta.kubernetes.io/create-vlan": "unconfined",
+					},
+				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:                 corev1.RestartPolicyNever,
 					TerminationGracePeriodSeconds: &tgp,
 					HostPID:                       true,
+					HostNetwork:                   true,
 					NodeSelector:                  createNodeSchedulingSelector(group),
 					Tolerations:                   slices.Clone(group.Spec.Tolerations),
 					Affinity:                      group.Spec.Affinity.DeepCopy(),
@@ -232,11 +242,18 @@ func createXfrmJob(r *IPSecConnectionReconciler, pid, id int, connName string, g
 								},
 							},
 							SecurityContext: &corev1.SecurityContext{
-								Privileged: u.Ptr(true),
+								AllowPrivilegeEscalation: u.Ptr(true),
+								Privileged:               u.Ptr(true),
+								RunAsUser:                u.Ptr(int64(0)),
 								Capabilities: &corev1.Capabilities{
 									Add: []corev1.Capability{
 										"NET_ADMIN",
+										"SYS_ADMIN",
+										"SYS_PTRACE",
 									},
+								},
+								SeccompProfile: &corev1.SeccompProfile{
+									Type: corev1.SeccompProfileTypeUnconfined,
 								},
 							},
 						},
