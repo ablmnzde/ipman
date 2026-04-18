@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vpn-test
+  namespace: default
+  labels:
+    app: vpn-test
+  annotations:
+    ipman.dialo.ai/childName: "myvpn"
+    ipman.dialo.ai/ipmanName: "myvpn"
+    ipman.dialo.ai/poolName: "primary"
+spec:
+  containers:
+    - name: toolbox
+      image: nicolaka/netshoot:latest
+      command: ["sleep", "infinity"]
+  restartPolicy: Never
+

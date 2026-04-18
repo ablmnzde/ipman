@@ -1,4 +1,3 @@
-[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/ipman)](https://artifacthub.io/packages/search?repo=ipman)
 # IPMan - IPSec Connection Manager for Kubernetes
 ![logo-512x512](https://github.com/user-attachments/assets/8739b49c-f77d-4c76-8091-73f427442bfb)
 
@@ -23,11 +22,14 @@ IPMan is a Kubernetes operator that simplifies the management of IPSec connectio
 
 ```bash
 # Add the repository
-helm repo add ipman https://dialohq.github.io/ipman
+helm repo add ipman https://ablmnzde.github.io/ipman
 
 # Install the chart
 helm install ipman ipman/ipman -n ipman-system --create-namespace
 ```
+
+This fork is published from `ablmnzde/ipman` and uses public Docker Hub images under the
+`ablmnzde` namespace.
 
 ## Usage
 
@@ -51,17 +53,51 @@ metadata:
   namespace: default
 spec:
   hostNetwork: true
-  nodeName: node1
+  nodeSelector:
+    ipman.dialo.ai/gateway: "true"
+  tolerations: []
+  frontendServiceType: LoadBalancer
+  frontendExternalTrafficPolicy: Local
 ```
-Here we specify that the other side of the VPN connections points to an IP address
-assigned to a host interface on one of our nodes `node1`.
+Here we specify that Charon and the node-local XFRM setup run on one eligible gateway node.
+If `frontendServiceType` is set, IPMan also manages a frontend Service for this group.
+For `LoadBalancer`, the service can provide a stable public IP while still forwarding to the
+single active node that owns the XFRM state.
 
-For example we could have a `enp0s1` interface with an address `192.168.10.201` on `node1`
-the next steps assume this is the case.
+When multiple nodes match the selector, IPMan keeps the current active node while it remains
+healthy and switches only when it becomes unavailable. The selected node is published in
+`status.activeNodeName`.
 
-note: Even though we specify a nodeName here, it's only for the public IP. Workload pods that
+When using a managed `LoadBalancer`, the recommended mode is to leave `spec.localAddr` and
+`spec.localId` empty in `IPSecConnection`. IPMan derives the effective values automatically:
+
+- `status.effectiveLocalAddr`: the active gateway node's real IP
+- `status.effectiveLocalId`: the group's frontend `LoadBalancer` IP
+
+That lets the tunnel survive weekly node replacement without editing the connection resource.
+
+note: Even though we constrain Charon placement here, workload pods that
 will communicate through this VPN can be on any node. Consult the `Architecture` section for a visual
 explanation.
+
+If you want Helm to create a bootstrap `CharonGroup`, set values like:
+
+```yaml
+charonGroup:
+  create: true
+  name: charongroup1
+  nodeSelector:
+    ipman.dialo.ai/gateway: "true"
+  tolerations: []
+  affinity: {}
+  hostNetwork: true
+  frontendServiceType: LoadBalancer
+  frontendExternalTrafficPolicy: Local
+  frontendLoadBalancerIP: 192.0.2.10 # optional
+```
+
+You can still use `nodeName` for fixed placement, but `nodeSelector` is better for automated node
+replacement during maintenance.
 
 ### Step 3: Create an IPSecConnection
 
@@ -77,8 +113,8 @@ spec:
   name: "example"
   remoteAddr: 192.168.10.204
   remoteId: 192.168.10.204
-  localAddr: 192.168.10.201
-  localId: 192.168.10.201
+  localAddr: ""
+  localId: ""
   secretRef:
     name: "ipsec-secret"
     namespace: default
@@ -122,6 +158,48 @@ This CR looks a lot like StrongSwan configuration file, with following added fie
   `local_ips`. They are split into pools. Here we name our pool `primary` but you can use any name. This helps when you share multiple services
   with the other side of the VPN. You may want to have a pool `service1` and `service2` and in each you would put IPs that the other side of the VPN
   expects these services to be at.
+6. `localAddr` and `localId`
+  In the automated `LoadBalancer` setup you should leave both empty. IPMan writes the derived values to
+  `status.effectiveLocalAddr` and `status.effectiveLocalId` and reloads StrongSwan when the active node
+  or frontend address changes.
+
+### LoadBalancer peer configuration
+
+If a `CharonGroup` is exposed through a `LoadBalancer`, use this addressing model:
+
+- `IPSecConnection.spec.localAddr`: empty, so IPMan derives the active node IP automatically
+- `IPSecConnection.spec.localId`: empty, so IPMan derives the frontend `LoadBalancer` IP automatically
+- `IPSecConnection.status.effectiveLocalAddr`: the real node or host-network IP where Charon runs
+- `IPSecConnection.status.effectiveLocalId`: the stable public `LoadBalancer` IP
+- remote peer `right`: `%any`
+- remote peer `rightid`: the stable public `LoadBalancer` IP
+
+Example remote StrongSwan `ipsec.conf`:
+
+```conf
+config setup
+    charondebug="ike 1, knl 1, cfg 0"
+
+conn myvpn
+    auto=add
+    keyexchange=ikev2
+    type=tunnel
+
+    left=85.215.61.92
+    leftid=85.215.61.92
+    leftsubnet=10.0.1.0/24
+
+    right=%any
+    rightid=87.106.197.164
+    rightsubnet=10.0.2.0/24
+
+    ike=aes256-sha256-modp2048
+    esp=aes256-sha256
+
+    authby=psk
+```
+
+`auto=add` is important here. `%any` works for the responder side, but not for an initiator.
 
 ### Step 3: Deploy Workloads Using the VPN Connection
 
@@ -153,6 +231,59 @@ If your app requires a specific IP to bind to and you have multiple IPs in a poo
 get which IP. To help with that there is an env var set in all worker pods named `VXLAN_IP` so in this example the pod could
 get the IP `10.0.2.3/24` from the pool and the env var will contain the value `10.0.2.3`.
 
+### Test Pod Example
+
+For ad-hoc verification, you can launch a debug pod that uses the VPN connection:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vpn-test
+  namespace: default
+  labels:
+    app: vpn-test
+  annotations:
+    ipman.dialo.ai/childName: "myvpn"
+    ipman.dialo.ai/ipmanName: "myvpn"
+    ipman.dialo.ai/poolName: "primary"
+spec:
+  containers:
+    - name: toolbox
+      image: nicolaka/netshoot:latest
+      command: ["sleep", "infinity"]
+  restartPolicy: Never
+```
+
+The `labels` block is currently required because the mutating webhook adds the worker label and
+expects `metadata.labels` to exist.
+
+Apply it with:
+
+```bash
+kubectl apply -f vpn-test.yaml
+kubectl get pod vpn-test -o wide
+```
+
+Verify the injected network configuration:
+
+```bash
+kubectl exec -it vpn-test -- ip addr
+kubectl exec -it vpn-test -- ip route
+kubectl exec -it vpn-test -- printenv VXLAN_IP
+```
+
+Then test a real host inside the remote protected subnet, for example any reachable host in
+`10.0.1.0/24`:
+
+```bash
+kubectl exec -it vpn-test -- ping -c 3 10.0.1.10
+kubectl exec -it vpn-test -- nc -vz 10.0.1.10 22
+```
+
+Do not assume `10.0.1.1` is valid unless a host actually exists there. The best target is a real
+remote VM or service that owns an address inside the configured `remote_ips` subnet.
+
 ## Configuration Reference
 
 ## Troubleshooting
@@ -164,6 +295,18 @@ If you encounter issues with your IPSec connections:
    kubectl get ipsecconnection -n ipman-system
    kubectl describe ipsecconnection example-connection -n ipman-system
    ```
+
+   For selector-based gateway placement, also verify the derived values:
+   ```bash
+   kubectl get charongroup -n ipman-system charongroup1 -o yaml
+   kubectl get ipsecconnection example-connection -o yaml
+   ```
+
+   The important status fields are:
+   - `CharonGroup.status.activeNodeName`
+   - `CharonGroup.status.frontendAddress`
+   - `IPSecConnection.status.effectiveLocalAddr`
+   - `IPSecConnection.status.effectiveLocalId`
 
 2. Check the operator logs:
    ```bash

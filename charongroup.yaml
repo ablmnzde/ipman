@@ -1,0 +1,13 @@
+apiVersion: ipman.dialo.ai/v1
+kind: CharonGroup
+metadata:
+  name: strongswan-test
+  namespace: ipman-system
+spec:
+  hostNetwork: true
+  charonExtraAnnotations: {}
+  nodeSelector:
+    ipman.dialo.ai/gateway: "true"
+  tolerations: []
+  frontendServiceType: LoadBalancer
+  frontendExternalTrafficPolicy: Local
