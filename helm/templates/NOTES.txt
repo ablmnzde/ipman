@@ -7,17 +7,31 @@ To get started:
 1. Create a secret with your pre-shared key:
    kubectl create secret generic ipsec-secret -n default --from-literal=example=yourpresharedkey
 
-2. Create an IPSecConnection custom resource:
+2. Create a CharonGroup custom resource:
+{{- if .Values.charonGroup.create }}
+   A bootstrap CharonGroup named {{ .Values.charonGroup.name }} was created by this chart.
+{{- else }}
+   kubectl apply -f your-charongroup.yaml
+{{- end }}
+
+3. Create an IPSecConnection custom resource:
    kubectl apply -f your-ipsec-connection.yaml
 
-3. Check the status of your IPSecConnection:
+4. Check the status of your IPSecConnection:
    kubectl get ipsecconnection -n {{ .Release.Namespace }}
    kubectl describe ipsecconnection your-connection-name -n {{ .Release.Namespace }}
 
-4. When deploying workloads that need to use the VPN connection, add the required annotations:
+5. When deploying workloads that need to use the VPN connection, add the required annotations:
    - ipman.dialo.ai/childName: "your-child-name"
    - ipman.dialo.ai/ipmanName: "your-connection-name"
    - ipman.dialo.ai/poolName: "your-pool-name"
+
+If you enable a frontend service on the CharonGroup, leave `spec.localAddr` and `spec.localId`
+empty in IPSecConnection to enable automatic derivation.
+
+IPMan will populate:
+  - `status.effectiveLocalAddr` from the active gateway node
+  - `status.effectiveLocalId` from `CharonGroup.status.frontendAddress`
 
 For more information, please refer to the README.md or documentation.
 

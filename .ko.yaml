@@ -1,8 +1,8 @@
 baseImageOverrides:
-  ./cmd/vxlandlord: plan9better/iproute2:latest
-  ./cmd/restctl: plan9better/swanctl:latest
+  ./cmd/vxlandlord: ablmnzde/ipman-iproute2:0.1.19-abl1
+  ./cmd/restctl: ablmnzde/ipman-swanctl:0.1.19-abl1
   ./cmd/xfrminjector: gcr.io/distroless/static
-  ./cmd/xfrminion: plan9better/iproute2:latest
+  ./cmd/xfrminion: ablmnzde/ipman-iproute2:0.1.19-abl1
 defaultPlatforms:
   - linux/amd64
   - linux/arm64

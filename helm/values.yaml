@@ -12,7 +12,7 @@ global:
 controller:
   podTimeoutSeconds: 60
   replicaCount: 1
-  image: "ghcr.io/dialohq/ipman/operator@sha256:4d73df389d1ec5125092f11459afab449dc45bacbdb22e288840738214b7a2db"
+  image: "ablmnzde/ipman-operator:0.1.19-abl1"
   pullPolicy: IfNotPresent
   podSecurityContext:
     runAsNonRoot: true
@@ -33,25 +33,41 @@ caddy:
   pullPolicy: "IfNotPresent"
 # Restctl service configuration
 restctl:
-  image: "ghcr.io/dialohq/ipman/restctl@sha256:3d644a97432e45bc629b3ea4a0c426a4a15521fa7bc1c3ee8434ad8f98a49697"
+  image: "ablmnzde/ipman-restctl:0.1.19-abl1"
   pullPolicy: "IfNotPresent"
 # Xfrminjector configuration
 xfrminjector:
-  image: "ghcr.io/dialohq/ipman/xfrminjector@sha256:60c31f10b5ead2a5583d5d0a7fac0146d7f1f9544ac226f3df97604208fdfa06"
+  image: "ablmnzde/ipman-xfrminjector:0.1.19-abl1"
   pullPolicy: "IfNotPresent"
   ttlSeconds: 120
 # VxlanLord configuration
 vxlandlord:
-  image: "ghcr.io/dialohq/ipman/vxlandlord@sha256:ed6b82a0254df7d95b0891b113f3065fe75f8eb7f46f5cc713ab941b00db1d9f"
+  image: "ablmnzde/ipman-vxlandlord:0.1.19-abl1"
   pullPolicy: "IfNotPresent"
 # XfrmMinion configuration
 xfrminion:
-  image: "ghcr.io/dialohq/ipman/xfrminion@sha256:905f39fe50efd84f10766f3dce47342ab78a7e3724acaf5d63a14e9b952abb7f"
+  image: "ablmnzde/ipman-xfrminion:0.1.19-abl1"
   pullPolicy: "IfNotPresent"
 # Charon daemon configuration
 charon:
-  image: "plan9better/charon:0.1.17"
+  image: "ablmnzde/ipman-charon:0.1.19-abl1"
   pullPolicy: "IfNotPresent"
+# Optional bootstrap CharonGroup configuration
+charonGroup:
+  create: false
+  name: ""
+  namespace: ""
+  hostNetwork: true
+  nodeName: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  interfaceName: null
+  charonExtraAnnotations: {}
+  frontendServiceType: ""
+  frontendLoadBalancerIP: ""
+  frontendExternalTrafficPolicy: "Local"
+  frontendServiceAnnotations: {}
 # Webhook configuration
 webhook:
   serviceName: "ipman-webhook-service"
