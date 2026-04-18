@@ -28,19 +28,45 @@ spec:
               type: object
               required:
                 - hostNetwork
-                - nodeName
               properties:
                 hostNetwork:
                   type: boolean
                 nodeName:
                   type: string
+                nodeSelector:
+                  type: object
+                  additionalProperties:
+                    type: string
+                tolerations:
+                  type: array
+                  items:
+                    x-kubernetes-preserve-unknown-fields: true
+                affinity:
+                  x-kubernetes-preserve-unknown-fields: true
                 interfaceName:
+                  type: string
+                frontendServiceType:
+                  type: string
+                frontendLoadBalancerIP:
+                  type: string
+                frontendExternalTrafficPolicy:
                   type: string
                 charonExtraAnnotations:
                   type: object
                   additionalProperties:
                     type: string
+                frontendServiceAnnotations:
+                  type: object
+                  additionalProperties:
+                    type: string
             status:
               type: object
+              properties:
+                frontendServiceName:
+                  type: string
+                frontendAddress:
+                  type: string
+                activeNodeName:
+                  type: string
       subresources:
         status: {}

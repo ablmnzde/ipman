@@ -449,10 +449,17 @@ func (a *OverrideConfigAction) Do(ctx context.Context, r *IPSecConnectionReconci
 		if err != nil {
 			return err
 		}
-		if group.Spec.NodeName == pod.Spec.NodeName {
+		if group.Status.ActiveNodeName == pod.Spec.NodeName {
+			effectiveConn := c.DeepCopy()
+			effectiveLocalAddr, effectiveLocalID, err := r.deriveEffectiveConnectionSpec(ctx, effectiveConn, &group)
+			if err != nil {
+				return err
+			}
+			effectiveConn.Spec.LocalAddr = effectiveLocalAddr
+			effectiveConn.Spec.LocalId = effectiveLocalID
 			d = append(d, ipmanv1.ConnData{
 				Secret:          secrets[c.Name],
-				IPSecConnection: c,
+				IPSecConnection: *effectiveConn,
 			})
 		}
 	}

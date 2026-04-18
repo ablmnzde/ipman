@@ -3,6 +3,7 @@ package v1
 import (
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -44,10 +45,17 @@ func (g *CharonGroup) Equals(other HasNsn) bool {
 
 // +k8s:deepcopy-gen=true
 type CharonGroupSpec struct {
-	HostNetwork            bool              `json:"hostNetwork"`
-	CharonExtraAnnotations map[string]string `json:"charonExtraAnnotations"`
-	NodeName               string            `json:"nodeName"`
-	InterfaceName          *string           `json:"interfaceName"`
+	HostNetwork                   bool                `json:"hostNetwork"`
+	CharonExtraAnnotations        map[string]string   `json:"charonExtraAnnotations"`
+	NodeName                      string              `json:"nodeName,omitempty"`
+	NodeSelector                  map[string]string   `json:"nodeSelector,omitempty"`
+	Tolerations                   []corev1.Toleration `json:"tolerations,omitempty"`
+	Affinity                      *corev1.Affinity    `json:"affinity,omitempty"`
+	InterfaceName                 *string             `json:"interfaceName"`
+	FrontendServiceType           string              `json:"frontendServiceType,omitempty"`
+	FrontendServiceAnnotations    map[string]string   `json:"frontendServiceAnnotations,omitempty"`
+	FrontendLoadBalancerIP        string              `json:"frontendLoadBalancerIP,omitempty"`
+	FrontendExternalTrafficPolicy string              `json:"frontendExternalTrafficPolicy,omitempty"`
 }
 
 type CharonGroupRef struct {
@@ -68,6 +76,9 @@ func (gr *CharonGroupRef) String() string {
 }
 
 type CharonGroupStatus struct {
+	FrontendServiceName string `json:"frontendServiceName,omitempty"`
+	FrontendAddress     string `json:"frontendAddress,omitempty"`
+	ActiveNodeName      string `json:"activeNodeName,omitempty"`
 }
 
 // +kubebuilder:object:root=true

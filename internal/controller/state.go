@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"maps"
+	"slices"
 
 	ipmanv1 "dialo.ai/ipman/api/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -67,6 +68,18 @@ func (p *IpmanPod[Spec]) CreateK8sPodMeta() corev1.Pod {
 			ipmanv1.NodeSelectorHostName: p.Meta.NodeName,
 		}
 	}
+	if len(p.Meta.NodeSelector) > 0 {
+		if pod.Spec.NodeSelector == nil {
+			pod.Spec.NodeSelector = map[string]string{}
+		}
+		maps.Copy(pod.Spec.NodeSelector, p.Meta.NodeSelector)
+	}
+	if len(p.Meta.Tolerations) > 0 {
+		pod.Spec.Tolerations = slices.Clone(p.Meta.Tolerations)
+	}
+	if p.Meta.Affinity != nil {
+		pod.Spec.Affinity = p.Meta.Affinity.DeepCopy()
+	}
 
 	return pod
 }
@@ -87,11 +100,14 @@ type Routes struct {
 
 // PodMeta contains metadata for IPMan pods
 type PodMeta struct {
-	Name      string `json:"name" diff:"name"`
-	Namespace string `json:"namespace" diff:"namespace"`
-	IP        string `json:"ip" diff:"-"`
-	NodeName  string `json:"node" diff:"node"`
-	Image     string `json:"image" diff:"image"`
+	Name         string              `json:"name" diff:"name"`
+	Namespace    string              `json:"namespace" diff:"namespace"`
+	IP           string              `json:"ip" diff:"-"`
+	NodeName     string              `json:"node" diff:"node"`
+	NodeSelector map[string]string   `json:"nodeSelector,omitempty" diff:"nodeSelector"`
+	Tolerations  []corev1.Toleration `json:"tolerations,omitempty" diff:"tolerations"`
+	Affinity     *corev1.Affinity    `json:"affinity,omitempty" diff:"affinity"`
+	Image        string              `json:"image" diff:"image"`
 }
 
 // GroupState represents the state of all IPMan pods on a specific node

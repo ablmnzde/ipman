@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -200,10 +201,10 @@ func createXfrmJob(r *IPSecConnectionReconciler, pid, id int, connName string, g
 					RestartPolicy:                 corev1.RestartPolicyNever,
 					TerminationGracePeriodSeconds: &tgp,
 					HostPID:                       true,
-					NodeSelector: map[string]string{
-						"kubernetes.io/hostname": group.Spec.NodeName,
-					},
-					Volumes: []corev1.Volume{createCharonSocketVolume(fullPath)},
+					NodeSelector:                  createNodeSchedulingSelector(group),
+					Tolerations:                   slices.Clone(group.Spec.Tolerations),
+					Affinity:                      group.Spec.Affinity.DeepCopy(),
+					Volumes:                       []corev1.Volume{createCharonSocketVolume(fullPath)},
 					Containers: []corev1.Container{
 						{
 							Name:            "create-vlan",

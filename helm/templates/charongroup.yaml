@@ -1,0 +1,44 @@
+{{- if .Values.charonGroup.create }}
+apiVersion: ipman.dialo.ai/v1
+kind: CharonGroup
+metadata:
+  name: {{ required "charonGroup.name is required when charonGroup.create=true" .Values.charonGroup.name }}
+  namespace: {{ default .Release.Namespace .Values.charonGroup.namespace }}
+spec:
+  hostNetwork: {{ .Values.charonGroup.hostNetwork }}
+{{- if .Values.charonGroup.nodeName }}
+  nodeName: {{ required "charonGroup.nodeName is required when charonGroup.create=true" .Values.charonGroup.nodeName }}
+{{- end }}
+{{- with .Values.charonGroup.nodeSelector }}
+  nodeSelector:
+{{- toYaml . | nindent 4 }}
+{{- end }}
+{{- with .Values.charonGroup.tolerations }}
+  tolerations:
+{{- toYaml . | nindent 4 }}
+{{- end }}
+{{- with .Values.charonGroup.affinity }}
+  affinity:
+{{- toYaml . | nindent 4 }}
+{{- end }}
+{{- if not (kindIs "invalid" .Values.charonGroup.interfaceName) }}
+  interfaceName: {{ .Values.charonGroup.interfaceName | toJson }}
+{{- end }}
+{{- with .Values.charonGroup.charonExtraAnnotations }}
+  charonExtraAnnotations:
+{{- toYaml . | nindent 4 }}
+{{- end }}
+{{- if .Values.charonGroup.frontendServiceType }}
+  frontendServiceType: {{ .Values.charonGroup.frontendServiceType }}
+{{- end }}
+{{- if .Values.charonGroup.frontendLoadBalancerIP }}
+  frontendLoadBalancerIP: {{ .Values.charonGroup.frontendLoadBalancerIP }}
+{{- end }}
+{{- if .Values.charonGroup.frontendExternalTrafficPolicy }}
+  frontendExternalTrafficPolicy: {{ .Values.charonGroup.frontendExternalTrafficPolicy }}
+{{- end }}
+{{- with .Values.charonGroup.frontendServiceAnnotations }}
+  frontendServiceAnnotations:
+{{- toYaml . | nindent 4 }}
+{{- end }}
+{{- end }}

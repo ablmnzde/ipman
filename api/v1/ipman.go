@@ -20,11 +20,13 @@ func secretRefEqual(a, b SecretRef) bool {
 
 // IPSecConnectionStatus represents the status of an IPSec connection, including gateway IPs, free IPs, pending IPs, and proxy IP.
 type IPSecConnectionStatus struct {
-	XfrmGatewayIPs map[string]string              `json:"xfrmGatewayIp"`
-	FreeIPs        map[string]map[string][]string `json:"freeIps"`
-	PendingIPs     map[string]string              `json:"pendingIps"`
-	State          string                         `json:"state"`
-	ChildrenState  map[string]string              `json:"childrenState"`
+	XfrmGatewayIPs     map[string]string              `json:"xfrmGatewayIp"`
+	FreeIPs            map[string]map[string][]string `json:"freeIps"`
+	PendingIPs         map[string]string              `json:"pendingIps"`
+	State              string                         `json:"state"`
+	ChildrenState      map[string]string              `json:"childrenState"`
+	EffectiveLocalAddr string                         `json:"effectiveLocalAddr,omitempty"`
+	EffectiveLocalId   string                         `json:"effectiveLocalId,omitempty"`
 }
 
 // IPSecConnection is the Kubernetes resource for configuring an IPSec connection.

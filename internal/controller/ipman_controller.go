@@ -476,11 +476,129 @@ func (r *IPSecConnectionReconciler) GetGroup(gr ipmanv1.CharonGroupRef) (ipmanv1
 		return ipmanv1.CharonGroup{}, err
 	}
 	for _, g := range gs.Items {
-		if g.Name == gr.Name {
+		if g.Name == gr.Name && g.Namespace == gr.Namespace {
+			nodeName, err := r.resolveActiveNodeName(context.Background(), &g)
+			if err != nil {
+				return ipmanv1.CharonGroup{}, err
+			}
+			if g.Status.ActiveNodeName != nodeName {
+				updated := g.DeepCopy()
+				updated.Status.ActiveNodeName = nodeName
+				if err := r.Status().Update(context.Background(), updated); err != nil && !apierrors.IsConflict(err) {
+					return ipmanv1.CharonGroup{}, fmt.Errorf("failed to update active node for charon group %s/%s: %w", g.Namespace, g.Name, err)
+				}
+			}
+			g.Status.ActiveNodeName = nodeName
 			return g, nil
 		}
 	}
-	return ipmanv1.CharonGroup{}, fmt.Errorf("Charon group %s not found", gr.Name)
+	return ipmanv1.CharonGroup{}, fmt.Errorf("Charon group %s/%s not found", gr.Namespace, gr.Name)
+}
+
+func (r *IPSecConnectionReconciler) resolveActiveNodeName(ctx context.Context, group *ipmanv1.CharonGroup) (string, error) {
+	if len(group.Spec.NodeSelector) == 0 {
+		if group.Spec.NodeName == "" {
+			return "", fmt.Errorf("charon group %s/%s does not define nodeName or nodeSelector", group.Namespace, group.Name)
+		}
+		return group.Spec.NodeName, nil
+	}
+
+	nodes := &corev1.NodeList{}
+	if err := r.List(ctx, nodes, client.MatchingLabels(group.Spec.NodeSelector)); err != nil {
+		return "", fmt.Errorf("couldn't list nodes for charon group %s/%s: %w", group.Namespace, group.Name, err)
+	}
+
+	healthy := make([]corev1.Node, 0, len(nodes.Items))
+	for _, node := range nodes.Items {
+		if node.DeletionTimestamp != nil {
+			continue
+		}
+		if !isNodeReady(node) {
+			continue
+		}
+		healthy = append(healthy, node)
+	}
+	if len(healthy) == 0 {
+		return "", fmt.Errorf("no healthy nodes found for charon group %s/%s selector %v", group.Namespace, group.Name, group.Spec.NodeSelector)
+	}
+
+	if group.Status.ActiveNodeName != "" && slices.ContainsFunc(healthy, func(node corev1.Node) bool {
+		return node.Name == group.Status.ActiveNodeName
+	}) {
+		return group.Status.ActiveNodeName, nil
+	}
+
+	slices.SortFunc(healthy, func(a, b corev1.Node) int {
+		if cmp := a.CreationTimestamp.Time.Compare(b.CreationTimestamp.Time); cmp != 0 {
+			return cmp
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	return healthy[0].Name, nil
+}
+
+func isNodeReady(node corev1.Node) bool {
+	for _, cond := range node.Status.Conditions {
+		if cond.Type == corev1.NodeReady {
+			return cond.Status == corev1.ConditionTrue
+		}
+	}
+	return false
+}
+
+func createNodeSchedulingSelector(group ipmanv1.CharonGroup) map[string]string {
+	selector := maps.Clone(group.Spec.NodeSelector)
+	if selector == nil {
+		selector = map[string]string{}
+	}
+	if group.Status.ActiveNodeName != "" {
+		selector[ipmanv1.NodeSelectorHostName] = group.Status.ActiveNodeName
+	} else if group.Spec.NodeName != "" {
+		selector[ipmanv1.NodeSelectorHostName] = group.Spec.NodeName
+	}
+	if len(selector) == 0 {
+		return nil
+	}
+	return selector
+}
+
+func (r *IPSecConnectionReconciler) getNodeAddress(ctx context.Context, nodeName string) (string, error) {
+	if nodeName == "" {
+		return "", fmt.Errorf("node name is empty")
+	}
+	node := &corev1.Node{}
+	if err := r.Get(ctx, types.NamespacedName{Name: nodeName}, node); err != nil {
+		return "", fmt.Errorf("couldn't get node %s: %w", nodeName, err)
+	}
+	for _, addr := range node.Status.Addresses {
+		if addr.Type == corev1.NodeInternalIP && addr.Address != "" {
+			return addr.Address, nil
+		}
+	}
+	return "", fmt.Errorf("node %s has no InternalIP", nodeName)
+}
+
+func (r *IPSecConnectionReconciler) deriveEffectiveConnectionSpec(ctx context.Context, conn *ipmanv1.IPSecConnection, group *ipmanv1.CharonGroup) (string, string, error) {
+	localAddr := conn.Spec.LocalAddr
+	if localAddr == "" {
+		addr, err := r.getNodeAddress(ctx, group.Status.ActiveNodeName)
+		if err != nil {
+			return "", "", err
+		}
+		localAddr = addr
+	}
+
+	localID := conn.Spec.LocalId
+	if localID == "" {
+		if group.Status.FrontendAddress != "" {
+			localID = group.Status.FrontendAddress
+		} else {
+			localID = localAddr
+		}
+	}
+
+	return localAddr, localID, nil
 }
 
 // CreateCharons creates Charon pod specifications for the given IPSecConnections
@@ -498,10 +616,13 @@ func (r *IPSecConnectionReconciler) CreateCharons(groups map[types.NamespacedNam
 
 		ch := IpmanPod[CharonPodSpec]{
 			Meta: PodMeta{
-				Name:      strings.Join([]string{ipmanv1.CharonPodName, g.Namespace, g.Name}, "-"),
-				NodeName:  g.Spec.NodeName,
-				Namespace: r.Env.NamespaceName,
-				Image:     r.Env.CharonDaemonImage,
+				Name:         strings.Join([]string{ipmanv1.CharonPodName, g.Namespace, g.Name}, "-"),
+				NodeName:     g.Status.ActiveNodeName,
+				NodeSelector: maps.Clone(g.Spec.NodeSelector),
+				Tolerations:  slices.Clone(g.Spec.Tolerations),
+				Affinity:     g.Spec.Affinity.DeepCopy(),
+				Namespace:    r.Env.NamespaceName,
+				Image:        r.Env.CharonDaemonImage,
 			},
 			Group: ipmanv1.CharonGroupRef{Name: g.Name, Namespace: g.Namespace},
 			Spec: CharonPodSpec{
@@ -529,10 +650,13 @@ func (r *IPSecConnectionReconciler) CreateRestctls(cl []ipmanv1.IPSecConnection,
 
 		rctl := IpmanPod[RestctlPodSpec]{}
 		rctl.Meta = PodMeta{
-			NodeName:  group.Spec.NodeName,
-			Name:      strings.Join([]string{ipmanv1.RestctlPodName, nsn.Namespace, nsn.Name}, "-"),
-			Namespace: r.Env.NamespaceName,
-			Image:     r.Env.CaddyImage,
+			NodeName:     group.Status.ActiveNodeName,
+			NodeSelector: maps.Clone(group.Spec.NodeSelector),
+			Tolerations:  slices.Clone(group.Spec.Tolerations),
+			Affinity:     group.Spec.Affinity.DeepCopy(),
+			Name:         strings.Join([]string{ipmanv1.RestctlPodName, nsn.Namespace, nsn.Name}, "-"),
+			Namespace:    r.Env.NamespaceName,
+			Image:        r.Env.CaddyImage,
 		}
 		rctl.Group = ipmanv1.CharonGroupRef{Name: nsn.Name, Namespace: nsn.Namespace}
 		rctl.Spec = RestctlPodSpec{
@@ -651,7 +775,7 @@ func (r *IPSecConnectionReconciler) updateIPSecConnectionStatus(conn *ipmanv1.IP
 		if err != nil {
 			return requeueIn, err
 		}
-		if node.GetLabels()["kubernetes.io/hostname"] == group.Spec.NodeName {
+		if node.GetLabels()["kubernetes.io/hostname"] == group.Status.ActiveNodeName {
 			charonPod := &corev1.Pod{}
 			nsn := types.NamespacedName{
 				Name:      ipmanv1.RestctlPodName + "-" + node.Status.NodeInfo.MachineID,
@@ -707,10 +831,13 @@ func (r *IPSecConnectionReconciler) CreateXfrms(cl []ipmanv1.IPSecConnection) []
 			}
 			x.Group = conn.Spec.Group
 			x.Meta = PodMeta{
-				Name:      strings.Join([]string{ipmanv1.XfrmPodName, c.Name, conn.Name}, "-"),
-				Namespace: r.Env.NamespaceName,
-				NodeName:  group.Spec.NodeName,
-				Image:     r.Env.XfrminionImage,
+				Name:         strings.Join([]string{ipmanv1.XfrmPodName, c.Name, conn.Name}, "-"),
+				Namespace:    r.Env.NamespaceName,
+				NodeName:     group.Status.ActiveNodeName,
+				NodeSelector: maps.Clone(group.Spec.NodeSelector),
+				Tolerations:  slices.Clone(group.Spec.Tolerations),
+				Affinity:     group.Spec.Affinity.DeepCopy(),
+				Image:        r.Env.XfrminionImage,
 			}
 			xfrms = append(xfrms, x)
 		}
@@ -847,6 +974,16 @@ func comparePods[Spec IpmanPodSpec](desired *IpmanPod[Spec], current *IpmanPod[S
 	return metaEqual
 }
 
+func connectionNeedsEffectiveOverride(conn ipmanv1.IPSecConnection, effectiveLocalAddr, effectiveLocalID string) bool {
+	if conn.Status.EffectiveLocalAddr == "" || conn.Status.EffectiveLocalId == "" {
+		return true
+	}
+	if conn.Status.EffectiveLocalAddr != effectiveLocalAddr {
+		return true
+	}
+	return conn.Status.EffectiveLocalId != effectiveLocalID
+}
+
 func diffImmutablePod[Spec IpmanPodSpec](desired *IpmanPod[Spec], current *IpmanPod[Spec]) []Action {
 	if comparePods(desired, current) {
 		return []Action{}
@@ -936,6 +1073,17 @@ func (r *IPSecConnectionReconciler) diffProxy(desired *IpmanPod[RestctlPodSpec],
 	// check if any are missing
 	allLoaded := true
 	for _, c := range connsPerGroup {
+		group, err := r.GetGroup(c.Spec.Group)
+		if err != nil {
+			return nil, err
+		}
+		effectiveLocalAddr, effectiveLocalID, err := r.deriveEffectiveConnectionSpec(context.Background(), &c, &group)
+		if err != nil {
+			return nil, err
+		}
+		if connectionNeedsEffectiveOverride(c, effectiveLocalAddr, effectiveLocalID) {
+			return []Action{&OverrideConfigAction{Configs: connsPerGroup, PodName: current.Meta.Name}}, nil
+		}
 		if !slices.Contains(info.Conns, c.Name) {
 			if !slices.Contains(r.NotLoadedConns, c.Name) {
 				r.NotLoadedConns = append(r.NotLoadedConns, c.Name)
@@ -1420,6 +1568,18 @@ func (r *IPSecConnectionReconciler) UpdateStatus(ctx context.Context) (*time.Dur
 		return nil, err
 	}
 	for _, ipsc := range list.Items {
+		group, err := r.GetGroup(ipsc.Spec.Group)
+		if err != nil {
+			return rq, err
+		}
+		effectiveLocalAddr, effectiveLocalID, err := r.deriveEffectiveConnectionSpec(ctx, &ipsc, &group)
+		if err != nil {
+			logger.Error(err, "Couldn't derive effective connection settings", "connection", ipsc.Name)
+			return rq, err
+		}
+		ipsc.Status.EffectiveLocalAddr = effectiveLocalAddr
+		ipsc.Status.EffectiveLocalId = effectiveLocalID
+
 		rq2, err := r.updateIPSecConnectionStatus(&ipsc, ctx)
 		rq = rq2
 		if err != nil {
@@ -1473,6 +1633,14 @@ func (r *IPSecConnectionReconciler) Reconcile(ctx context.Context, req reconcile
 			return ctrl.Result{}, fmt.Errorf("Error updating status after %d tries: %w", ipmanv1.UpdateStatusMaxRetries, err)
 		}
 	}
+
+	err = r.ensureFrontendServices(ctx)
+	if err != nil {
+		r.EventRecorder.Event(&operatorPod, "Warning", "EnsureFrontendServices", err.Error())
+		logger.Error(err, "Error ensuring frontend services")
+		return ctrl.Result{}, err
+	}
+
 	currentState, err := r.GetClusterState(ctx)
 	if err != nil {
 		if errors.Is(err, &RequestError{}) {
@@ -1559,9 +1727,41 @@ func (r *IPSecConnectionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return false
 		},
 	}
+	groupToConn := handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+		group, ok := obj.(*ipmanv1.CharonGroup)
+		if !ok {
+			return nil
+		}
+		list := &ipmanv1.IPSecConnectionList{}
+		if err := r.List(ctx, list); err != nil {
+			return nil
+		}
+		reqs := []reconcile.Request{}
+		for _, conn := range list.Items {
+			if conn.Spec.Group.Name == group.Name && conn.Spec.Group.Namespace == group.Namespace {
+				reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{Name: conn.Name, Namespace: conn.Namespace}})
+			}
+		}
+		return reqs
+	})
+	groupPredicate := predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool { return true },
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldGroup, okOld := e.ObjectOld.(*ipmanv1.CharonGroup)
+			newGroup, okNew := e.ObjectNew.(*ipmanv1.CharonGroup)
+			if !okOld || !okNew {
+				return false
+			}
+			return oldGroup.Generation != newGroup.Generation ||
+				oldGroup.Status.ActiveNodeName != newGroup.Status.ActiveNodeName ||
+				oldGroup.Status.FrontendAddress != newGroup.Status.FrontendAddress
+		},
+		DeleteFunc:  func(e event.DeleteEvent) bool { return true },
+		GenericFunc: func(e event.GenericEvent) bool { return false },
+	}
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&ipmanv1.IPSecConnection{}).
-		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		For(&ipmanv1.IPSecConnection{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&corev1.Pod{}, &handler.EnqueueRequestForObject{}, builder.WithPredicates(podPredicate)).
+		Watches(&ipmanv1.CharonGroup{}, groupToConn, builder.WithPredicates(groupPredicate)).
 		Complete(r)
 }

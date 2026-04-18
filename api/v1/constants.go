@@ -49,8 +49,9 @@ const (
 	InterfaceRequestContainerName = "iface-request"
 	CharonSocketHostVolumeName    = "charon-host-socket"
 
-	CharonPodName  = "charon-pod" // keep this 2 part seperated with '-'
-	RestctlPodName = "restctl-pod"
+	CharonPodName             = "charon-pod" // keep this 2 part seperated with '-'
+	RestctlPodName            = "restctl-pod"
+	CharonFrontendServiceName = "charon-frontend"
 
 	// CharonSocketVolumeMountPath specifies the path where the charon socket volume is mounted.
 	CharonSocketVolumeMountPath = "/var/run/" // ENV VAR
