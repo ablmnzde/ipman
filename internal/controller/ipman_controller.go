@@ -69,6 +69,8 @@ type IPSecConnectionReconciler struct {
 	Env                     Envs
 	NotLoadedConns          []string
 	AllConns                []string
+	ConnectionFailureCounts map[string]int
+	ChildFailureCounts      map[string]int
 	ConnectionsStatusMetric *prometheus.GaugeVec
 	NotLoadedMetric         prometheus.Counter
 	EventRecorder           record.EventRecorder
@@ -1435,7 +1437,72 @@ func getIPSec(items []IPSecConnectionState, name string) (IPSecConnectionState, 
 	return IPSecConnectionState{}, fmt.Errorf("Not found")
 }
 
-func diffIPSecs(desired, current []IPSecConnectionState, restctlIP string) []Action {
+const restartFailureThreshold = 3
+
+func childFailureKey(connectionName, childName string) string {
+	return connectionName + "/" + childName
+}
+
+func (r *IPSecConnectionReconciler) shouldRestartConnection(connectionName string) bool {
+	if r.ConnectionFailureCounts == nil {
+		r.ConnectionFailureCounts = make(map[string]int)
+	}
+	r.ConnectionFailureCounts[connectionName]++
+	return r.ConnectionFailureCounts[connectionName] >= restartFailureThreshold
+}
+
+func (r *IPSecConnectionReconciler) clearConnectionFailure(connectionName string) {
+	if r.ConnectionFailureCounts == nil {
+		return
+	}
+	delete(r.ConnectionFailureCounts, connectionName)
+}
+
+func (r *IPSecConnectionReconciler) shouldRestartChild(connectionName, childName string) bool {
+	if r.ChildFailureCounts == nil {
+		r.ChildFailureCounts = make(map[string]int)
+	}
+	key := childFailureKey(connectionName, childName)
+	r.ChildFailureCounts[key]++
+	return r.ChildFailureCounts[key] >= restartFailureThreshold
+}
+
+func (r *IPSecConnectionReconciler) clearChildFailure(connectionName, childName string) {
+	if r.ChildFailureCounts == nil {
+		return
+	}
+	delete(r.ChildFailureCounts, childFailureKey(connectionName, childName))
+}
+
+func fetchLiveIPSecStates(restctlIP string) (map[string]comms.LiveConnectionState, error) {
+	url := fmt.Sprintf("http://%s:61410/live-state", restctlIP)
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("live-state response is not 200, is %d", resp.StatusCode)
+	}
+	out, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	live := comms.LiveStateResponse{}
+	if err := json.Unmarshal(out, &live); err != nil {
+		return nil, err
+	}
+	if live.Error != "" {
+		return nil, fmt.Errorf("live-state error: %s", live.Error)
+	}
+	result := make(map[string]comms.LiveConnectionState, len(live.Connections))
+	for _, conn := range live.Connections {
+		result[conn.Name] = conn
+	}
+	return result, nil
+}
+
+func (r *IPSecConnectionReconciler) diffIPSecs(desired, current []IPSecConnectionState, restctlIP string) []Action {
 	// There is nothing we can (should) do about missing CR's
 	// so just filter them out in the edge case that
 	// something happened between `List` calls.
@@ -1448,24 +1515,41 @@ func diffIPSecs(desired, current []IPSecConnectionState, restctlIP string) []Act
 			desiredFiltered = append(desiredFiltered, dState)
 		}
 	}
+	liveStates, err := fetchLiveIPSecStates(restctlIP)
+	if err != nil {
+		return acts
+	}
 	// Is everything UP?
 	for _, dState := range desiredFiltered {
 		cState, err := getIPSec(current, dState.Name)
 		if err != nil {
 			continue
 		}
+		liveState, hasLiveState := liveStates[dState.Name]
 		if cState.State == "" || cState.ChildrenState == nil {
 			acts = append(acts, &UpdateChildConnectionStatus{ConnectionName: dState.Name})
 		}
 		if cState.State == "Down" {
-			acts = append(acts, &RestartConnectionAction{Name: cState.Name, RestctlIP: restctlIP})
+			if hasLiveState && liveState.State == "UP" {
+				r.clearConnectionFailure(cState.Name)
+			} else if r.shouldRestartConnection(cState.Name) {
+				acts = append(acts, &RestartConnectionAction{Name: cState.Name, RestctlIP: restctlIP})
+			}
+		} else {
+			r.clearConnectionFailure(cState.Name)
 		}
 		for childName := range dState.ChildrenState {
 			val, ok := cState.ChildrenState[childName]
 			if !ok || cState.State == "" {
 				acts = append(acts, &UpdateChildConnectionStatus{ConnectionName: dState.Name})
 			} else if val != "UP" {
-				acts = append(acts, &RestartChildConnectionAction{ConnectionName: dState.Name, ChildName: childName, RestctlIP: restctlIP})
+				if hasLiveState && liveState.ChildrenState[childName] == "UP" {
+					r.clearChildFailure(dState.Name, childName)
+				} else if r.shouldRestartChild(dState.Name, childName) {
+					acts = append(acts, &RestartChildConnectionAction{ConnectionName: dState.Name, ChildName: childName, RestctlIP: restctlIP})
+				}
+			} else {
+				r.clearChildFailure(dState.Name, childName)
 			}
 		}
 	}
@@ -1534,7 +1618,7 @@ func (r *IPSecConnectionReconciler) DiffStates(desired *ClusterState, current *C
 			// At this point there may not be a restctl pod
 			// and we need it to pass it's ip to the action
 			if current.Groups[idx].Proxy != nil {
-				ipsecActions := diffIPSecs(gs.IPSecs, current.Groups[idx].IPSecs, current.Groups[idx].Proxy.Meta.IP)
+				ipsecActions := r.diffIPSecs(gs.IPSecs, current.Groups[idx].IPSecs, current.Groups[idx].Proxy.Meta.IP)
 				acts = append(acts, ipsecActions...)
 			}
 		}

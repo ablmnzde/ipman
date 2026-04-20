@@ -121,3 +121,14 @@ type RestartConnectionChildRequest struct {
 	ConnectionName string `json:"connectionName"`
 	ChildName      string `json:"childName"`
 }
+
+type LiveConnectionState struct {
+	Name          string            `json:"name"`
+	State         string            `json:"state"`
+	ChildrenState map[string]string `json:"childrenState"`
+}
+
+type LiveStateResponse struct {
+	Connections []LiveConnectionState `json:"connections"`
+	Error       string                `json:"error,omitempty"`
+}

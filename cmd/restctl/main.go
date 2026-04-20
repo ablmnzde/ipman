@@ -49,6 +49,38 @@ type FailureInfo struct {
 	Child      string
 }
 
+type failureTracker struct {
+	counts    map[FailureInfo]int
+	threshold int
+}
+
+func newFailureTracker(threshold int) *failureTracker {
+	return &failureTracker{
+		counts:    make(map[FailureInfo]int),
+		threshold: threshold,
+	}
+}
+
+func (t *failureTracker) Observe(failures []FailureInfo) []FailureInfo {
+	current := make(map[FailureInfo]struct{}, len(failures))
+	stable := make([]FailureInfo, 0, len(failures))
+
+	for _, failure := range failures {
+		current[failure] = struct{}{}
+		t.counts[failure]++
+		if t.counts[failure] >= t.threshold {
+			stable = append(stable, failure)
+		}
+	}
+
+	maps.DeleteFunc(t.counts, func(f FailureInfo, _ int) bool {
+		_, ok := current[f]
+		return !ok
+	})
+
+	return stable
+}
+
 func getExtra(e map[string]string, k string, d string) string {
 	val, ok := e[k]
 	if ok {
@@ -148,15 +180,24 @@ func translate(ipsec ipmanv1.IPSecConnectionSpec) (*goviciclient.IKEConfig, erro
 	}
 	if val, ok := ipsec.Extra["mobike"]; ok {
 		ike.Mobike = val
+	} else {
+		// Default to mobike yes for better K8s networking resilience
+		ike.Mobike = "yes"
 	}
 	if val, ok := ipsec.Extra["dpd_delay"]; ok {
 		ike.DpdDelay = val
+	} else {
+		ike.DpdDelay = "30s"
 	}
 	if val, ok := ipsec.Extra["dpd_timeout"]; ok {
 		ike.DpdTimeout = val
+	} else {
+		ike.DpdTimeout = "120s"
 	}
 	if val, ok := ipsec.Extra["fragmentation"]; ok {
 		ike.Fragmentation = val
+	} else {
+		ike.Fragmentation = "yes"
 	}
 	if val, ok := ipsec.Extra["childless"]; ok {
 		ike.Childless = val
@@ -196,6 +237,8 @@ func translate(ipsec ipmanv1.IPSecConnectionSpec) (*goviciclient.IKEConfig, erro
 	}
 	if val, ok := ipsec.Extra["close_action"]; ok {
 		ike.CloseAction = val
+	} else {
+		ike.CloseAction = "restart"
 	}
 
 	// Handle pools separately as it's an array
@@ -228,6 +271,9 @@ func translate(ipsec ipmanv1.IPSecConnectionSpec) (*goviciclient.IKEConfig, erro
 		}
 		if val, ok := v.Extra["rekey_time"]; ok {
 			child.RekeyTime = val
+		} else {
+			// Default rekey_time to 4h to match IKE
+			child.RekeyTime = "14400"
 		}
 		if val, ok := v.Extra["rand_packets"]; ok {
 			child.RandPackets = val
@@ -249,9 +295,13 @@ func translate(ipsec ipmanv1.IPSecConnectionSpec) (*goviciclient.IKEConfig, erro
 		}
 		if val, ok := v.Extra["dpd_action"]; ok {
 			child.DpdAction = val
+		} else {
+			child.DpdAction = "restart"
 		}
 		if val, ok := v.Extra["close_action"]; ok {
 			child.CloseAction = val
+		} else {
+			child.CloseAction = "restart"
 		}
 
 		// Store any remaining extras that aren't explicitly handled
@@ -300,20 +350,69 @@ func getConfigs(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-
-	sas, err := swanctlListSas()
-	if err != nil {
+	connCollector := swanparse.NewConnectionCollector()
+	if err := connCollector.VisitAST(conns); err != nil {
 		json.NewEncoder(w).Encode(comms.ConfigRequest{
 			Error: err,
 		})
 		return
 	}
-	v := NewStrongSwanVisitor(conns, sas)
 
 	json.NewEncoder(w).Encode(comms.ConfigRequest{
-		Conns: slices.Collect(maps.Keys(v.SasChildren)),
+		Conns: slices.Collect(maps.Keys(connCollector.Children)),
 		Error: nil,
 	})
+}
+
+func getLiveState(w http.ResponseWriter, r *http.Request) {
+	conns, err := swanctlListConns()
+	if err != nil {
+		json.NewEncoder(w).Encode(comms.LiveStateResponse{Error: err.Error()})
+		return
+	}
+
+	sas, err := swanctlListSas()
+	if err != nil {
+		json.NewEncoder(w).Encode(comms.LiveStateResponse{Error: err.Error()})
+		return
+	}
+
+	v := NewStrongSwanVisitor(conns, sas)
+	if err := v.VisitAST(conns); err != nil {
+		json.NewEncoder(w).Encode(comms.LiveStateResponse{Error: err.Error()})
+		return
+	}
+
+	connCollector := swanparse.NewConnectionCollector()
+	if err := connCollector.VisitAST(conns); err != nil {
+		json.NewEncoder(w).Encode(comms.LiveStateResponse{Error: err.Error()})
+		return
+	}
+
+	states := make([]comms.LiveConnectionState, 0, len(connCollector.Children))
+	for connName, children := range connCollector.Children {
+		state := comms.LiveConnectionState{
+			Name:          connName,
+			State:         "UP",
+			ChildrenState: make(map[string]string, len(children)),
+		}
+		if v.MissingConns[connName] {
+			state.State = "Down"
+		}
+		for childName := range children {
+			childState := "UP"
+			if slices.Contains(v.MissingChildren[connName], childName) || v.MissingConns[connName] {
+				childState = "Down"
+			}
+			state.ChildrenState[childName] = childState
+		}
+		states = append(states, state)
+	}
+	slices.SortFunc(states, func(a, b comms.LiveConnectionState) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	json.NewEncoder(w).Encode(comms.LiveStateResponse{Connections: states})
 }
 
 func reloadConfig(w http.ResponseWriter, r *http.Request) {
@@ -720,12 +819,13 @@ func listFailedConnections() ([]FailureInfo, error) {
 }
 
 func monitorConnections(ch chan<- FailureInfo, log *slog.Logger) {
+	tracker := newFailureTracker(6)
 	for {
 		failures, err := listFailedConnections()
 		if err != nil {
 			log.Error("Error listing failed strongswan connections", "error", err)
 		}
-		for _, f := range failures {
+		for _, f := range tracker.Observe(failures) {
 			ch <- f
 		}
 		time.Sleep(5 * time.Second)
@@ -789,6 +889,7 @@ func main() {
 	mux.HandleFunc("/p1ng", p0ng)
 	mux.HandleFunc("/reload", reloadConfig)
 	mux.HandleFunc("/configs", getConfigs)
+	mux.HandleFunc("/live-state", getLiveState)
 	mux.HandleFunc("/conn-restart", RestartConnection)
 	mux.HandleFunc("/child-restart", RestartConnectionChild)
 

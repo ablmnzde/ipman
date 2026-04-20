@@ -197,9 +197,75 @@ conn myvpn
     esp=aes256-sha256
 
     authby=psk
+
+    reauth=no
+    ikelifetime=4h
+    lifetime=4h
+    margintime=9m
+    rekeymargin=9m
+    keyingtries=%forever
 ```
 
 `auto=add` is important here. `%any` works for the responder side, but not for an initiator.
+
+### StrongSwan VM notes
+
+For a responder VM that uses legacy `ipsec.conf`, set explicit lifetimes. If you leave them unset,
+StrongSwan applies its own defaults, which may trigger frequent CHILD rekeys and interact badly with
+controller-side failure detection.
+
+Recommended responder config:
+
+```conf
+config setup
+    charondebug="ike 2, cfg 2, knl 1"
+
+conn myvpn
+    auto=add
+    keyexchange=ikev2
+    type=tunnel
+
+    left=<REMOTE_GATEWAY_IP>
+    leftid=<REMOTE_GATEWAY_IP>
+    leftsubnet=10.0.1.0/24
+
+    right=%any
+    rightid=<IPMAN_LOADBALANCER_IP>
+    rightsubnet=10.0.2.0/24
+
+    ike=aes256-sha256-modp2048
+    esp=aes256-sha256
+    authby=psk
+
+    reauth=no
+    ikelifetime=4h
+    lifetime=4h
+    margintime=9m
+    rekeymargin=9m
+    keyingtries=%forever
+```
+
+Reload the VM after editing:
+
+```bash
+sudo ipsec reload
+sudo ipsec down myvpn || true
+```
+
+Because `right=%any` is responder-only, do not use `ipsec up myvpn` on that VM. Initiate the tunnel
+from the IPMan side instead.
+
+Useful verification commands on the VM:
+
+```bash
+sudo swanctl --list-conns
+sudo swanctl --list-sas
+sudo journalctl -u strongswan-starter -f
+```
+
+If the VM is exposed publicly, you will usually see random malformed UDP/500 scan traffic in the
+logs. Messages about invalid IKE headers or broken IKEv1 proposals from unrelated source IPs are
+normal background noise and are not related to your configured tunnel.
 
 ### Step 3: Deploy Workloads Using the VPN Connection
 

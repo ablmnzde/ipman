@@ -12,7 +12,7 @@ global:
 controller:
   podTimeoutSeconds: 60
   replicaCount: 1
-  image: "ablmnzde/ipman-operator:0.1.19-abl2"
+  image: "ablmnzde/ipman-operator:0.1.19-abl7"
   pullPolicy: IfNotPresent
   podSecurityContext:
     runAsNonRoot: true
@@ -33,7 +33,7 @@ caddy:
   pullPolicy: "IfNotPresent"
 # Restctl service configuration
 restctl:
-  image: "ablmnzde/ipman-restctl:0.1.19-abl2"
+  image: "ablmnzde/ipman-restctl:0.1.19-abl7"
   pullPolicy: "IfNotPresent"
 # Xfrminjector configuration
 xfrminjector:
